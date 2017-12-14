@@ -3,6 +3,7 @@ package com.zeapo.pwdstore.autofill;
 import android.app.Service;
 import android.app.assist.AssistStructure;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.service.autofill.FillCallback;
 import android.service.autofill.FillRequest;
@@ -35,6 +36,13 @@ public class OreoAutofillService extends android.service.autofill.AutofillServic
         final AssistStructure structure = request.getFillContexts().get(request.getFillContexts().size() - 1).getStructure();
         final String packageName = structure.getActivityComponent().getPackageName();
         Log.d(Constants.TAG, String.format("onFillRequest(): packageName=%s", packageName));
+
+        // Do not offer autofill for OpenKeychain (circular) or system UI
+        if (packageName.equals("org.sufficientlysecure.keychain") || packageName.equals("com.android.systemui")) {
+            callback.onSuccess(null);
+        }
+
+        final OreoAssistStructureParser parser = new OreoAssistStructureParser(getApplicationContext(), structure);
     }
 
     @Override
