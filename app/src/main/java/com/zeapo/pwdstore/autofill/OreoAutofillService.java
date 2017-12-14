@@ -1,6 +1,7 @@
 package com.zeapo.pwdstore.autofill;
 
 import android.app.Service;
+import android.app.assist.AssistStructure;
 import android.os.Build;
 import android.os.CancellationSignal;
 import android.service.autofill.FillCallback;
@@ -19,12 +20,25 @@ public class OreoAutofillService extends android.service.autofill.AutofillServic
     }
 
     @Override
-    public void onFillRequest(@NonNull FillRequest fillRequest, @NonNull CancellationSignal cancellationSignal, @NonNull FillCallback fillCallback) {
-        Log.d(Constants.TAG, "onFillRequest");
+    public void onFillRequest(@NonNull FillRequest request, @NonNull CancellationSignal cancellationSignal, @NonNull FillCallback callback) {
+        Log.d(Constants.TAG, "onFillRequest(): called");
+        cancellationSignal.setOnCancelListener(new CancellationSignal.OnCancelListener() {
+            @Override
+            public void onCancel() {
+                Log.w(Constants.TAG, "onFillRequest(): cancellation not supported");
+            }
+        });
+
+        if (request.getFillContexts().size() > 1) {
+            Log.w(Constants.TAG, "onFillRequest(): multiple FillContexts not supported");
+        }
+        final AssistStructure structure = request.getFillContexts().get(request.getFillContexts().size() - 1).getStructure();
+        final String packageName = structure.getActivityComponent().getPackageName();
+        Log.d(Constants.TAG, String.format("onFillRequest(): packageName=%s", packageName));
     }
 
     @Override
     public void onSaveRequest(@NonNull SaveRequest saveRequest, @NonNull SaveCallback saveCallback) {
-        Log.d(Constants.TAG, "onSaveRequest");
+        Log.d(Constants.TAG, "onSaveRequest: called");
     }
 }
