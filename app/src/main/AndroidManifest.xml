@@ -57,6 +57,13 @@
         <service
           android:name=".ClipboardService"
           android:process=":clipboard_service_process"  />
+        <service android:name=".autofill.oreo.OreoAutofillService"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+            <meta-data android:name="android.autofill" android:resource="@xml/oreo_autofill_service" />
+        </service>
 
         <activity
             android:name=".autofill.AutofillActivity"
