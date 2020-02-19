@@ -169,8 +169,9 @@ class Form(structure: AssistStructure, context: Context) {
     fun fillWith(username: String?, password: String, context: Context): FillResponse {
         check(canBeFilled)
         return FillResponse.Builder().run {
-            val remoteView = RemoteViews(context.packageName, R.layout.autofill_row_layout)
-            remoteView.setTextViewText(R.id.app_name, username)
+            val remoteView = RemoteViews(context.packageName, R.layout.oreo_autofill_dataset)
+            remoteView.setTextViewText(R.id.text1, packageName)
+            remoteView.setTextViewText(R.id.text2, username)
             val dataset = Dataset.Builder(remoteView).run {
                 if (username != null && usernameField != null)
                     usernameField!!.fillWith(this, username)
