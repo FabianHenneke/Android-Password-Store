@@ -131,6 +131,19 @@ class Form(structure: AssistStructure, context: Context) {
         return Math.abs(id0 - id1) == 1
     }
 
+    private fun isFocusedOrFollowsFocusedUsernameField(field: FormField): Boolean {
+        if (field.isFocused)
+            return true
+
+        val ownIndex = fillableFields.indexOf(field)
+        if (ownIndex == 0)
+            return false
+        val potentialUsernameField = fillableFields[ownIndex - 1]
+        if (!potentialUsernameField.isFocused || !potentialUsernameField.isLikelyUsernameField)
+            return false
+        return true
+    }
+
     private fun identifyPasswordFields(): List<FormField> {
         val possiblePasswordFields = fillableFields.filter { it.passwordCertainty >= CertaintyLevel.Possible }
         if (possiblePasswordFields.isEmpty())
@@ -138,9 +151,13 @@ class Form(structure: AssistStructure, context: Context) {
         val certainPasswordFields = fillableFields.filter { it.passwordCertainty >= CertaintyLevel.Certain }
         if (isSingleFieldOrAdjacentPair(certainPasswordFields))
             return certainPasswordFields
+        if (certainPasswordFields.count { isFocusedOrFollowsFocusedUsernameField(it) } == 1)
+            return certainPasswordFields.filter { isFocusedOrFollowsFocusedUsernameField(it) }
         val likelyPasswordFields = fillableFields.filter { it.passwordCertainty >= CertaintyLevel.Likely }
         if (isSingleFieldOrAdjacentPair(likelyPasswordFields))
             return likelyPasswordFields
+        if (likelyPasswordFields.count { isFocusedOrFollowsFocusedUsernameField(it) } == 1)
+            return likelyPasswordFields.filter { isFocusedOrFollowsFocusedUsernameField(it) }
         if (isSingleFieldOrAdjacentPair(possiblePasswordFields))
             return possiblePasswordFields
         return emptyList()

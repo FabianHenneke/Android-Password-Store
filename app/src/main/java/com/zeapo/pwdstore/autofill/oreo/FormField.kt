@@ -89,6 +89,7 @@ class FormField(node: AssistStructure.ViewNode) {
     val inputType = node.inputType
     val hasPasswordInputType = isPasswordInputType(inputType)
     val isVisible = node.visibility == View.VISIBLE
+    val isFocused = node.isFocused
 
     val htmlTag = node.htmlInfo?.tag
     val htmlInputType = node.htmlInfo?.attributes?.firstOrNull { it.first == "type" }?.second
@@ -119,7 +120,7 @@ class FormField(node: AssistStructure.ViewNode) {
 
     override fun toString(): String {
         val field = if (isHtmlTextField) "$htmlTag[type=$htmlInputType]" else className
-        val description = "\"$hint\", $idEntry"
+        val description = "\"$hint\", $idEntry, focused=$isFocused"
         return "$field ($description): password=$passwordCertainty, username=$usernameCertainty"
     }
 }
