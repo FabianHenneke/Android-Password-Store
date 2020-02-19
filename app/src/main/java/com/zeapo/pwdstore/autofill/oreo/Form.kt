@@ -51,20 +51,27 @@ private val ACCESSIBILITY_BROWSERS = listOf("org.mozilla.firefox",
         "com.vivaldi.browser")
 private val ALL_BROWSERS = AUTOFILL_BROWSERS + ACCESSIBILITY_BROWSERS
 
+sealed class FormOrigin(open val identifier: String) {
+    data class Web(override val identifier: String) : FormOrigin(identifier)
+    data class App(override val identifier: String) : FormOrigin(identifier)
+}
+
 @RequiresApi(Build.VERSION_CODES.O)
 class Form(structure: AssistStructure, context: Context) {
     private val TAG = "Form"
 
-    val fillableFields = mutableListOf<FormField>()
-    val ignoredIds = mutableListOf<AutofillId>()
-    val passwordFields by lazy { identifyPasswordFields() }
-    val usernameField by lazy { identifyUsernameField()}
-    val canBeFilled by lazy { usernameField != null || passwordFields.isNotEmpty() }
+    private val fillableFields = mutableListOf<FormField>()
+    private val ignoredIds = mutableListOf<AutofillId>()
+    private val passwordFields by lazy { identifyPasswordFields() }
+    private val usernameField by lazy { identifyUsernameField() }
 
-    var packageName = structure.activityComponent.packageName
+    private var packageName = structure.activityComponent.packageName
     // TODO: Verify signature
-    val isBrowser = packageName in ALL_BROWSERS
-    var originToFill: String? = null
+    private val isBrowser = packageName in ALL_BROWSERS
+    private var originToFill: String? = null
+
+    val canBeFilled by lazy { usernameField != null || passwordFields.isNotEmpty() }
+    val origin = if (isBrowser && originToFill != null) FormOrigin.Web(originToFill!!) else FormOrigin.App(packageName)
 
     init {
         Log.d(TAG, "Request from $packageName (${context.getPackageVerificationId(packageName)})")
@@ -170,7 +177,7 @@ class Form(structure: AssistStructure, context: Context) {
         check(canBeFilled)
         return FillResponse.Builder().run {
             val remoteView = RemoteViews(context.packageName, R.layout.oreo_autofill_dataset)
-            remoteView.setTextViewText(R.id.text1, packageName)
+            remoteView.setTextViewText(R.id.text1, origin.identifier)
             remoteView.setTextViewText(R.id.text2, username)
             val dataset = Dataset.Builder(remoteView).run {
                 if (username != null && usernameField != null)
