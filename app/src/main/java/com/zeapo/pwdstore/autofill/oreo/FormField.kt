@@ -2,9 +2,13 @@ package com.zeapo.pwdstore.autofill.oreo
 
 import android.app.assist.AssistStructure
 import android.os.Build
+import android.service.autofill.Dataset
 import android.text.InputType
+import android.util.Log
 import android.view.View
+import android.view.autofill.AutofillValue
 import androidx.annotation.RequiresApi
+import java.util.*
 
 @RequiresApi(Build.VERSION_CODES.O)
 private val HINTS_USERNAME = listOf(View.AUTOFILL_HINT_USERNAME)
@@ -30,9 +34,9 @@ private fun isPasswordInputType(inputType: Int): Boolean {
     return when (typeClass) {
         InputType.TYPE_CLASS_NUMBER -> typeVariation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
         InputType.TYPE_CLASS_TEXT -> typeVariation in listOf(
-                    InputType.TYPE_TEXT_VARIATION_PASSWORD,
-                    InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
-                    InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD)
+                InputType.TYPE_TEXT_VARIATION_PASSWORD,
+                InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+                InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD)
         else -> false
     }
 }
@@ -44,13 +48,37 @@ private val HTML_INPUT_FIELD_TYPES_FILLABLE = HTML_INPUT_FIELD_TYPES_USERNAME + 
 @RequiresApi(Build.VERSION_CODES.O)
 private fun isSupportedHint(hint: String) = hint in HINTS_USERNAME + HINTS_PASSWORD
 
+private val EXCLUDED_TERMS = listOf(
+        "url_bar", // Chrome/Edge address bar
+        "search",
+        "find"
+)
+private val PASSWORD_HEURISTIC_TERMS = listOf(
+        "password",
+        "pwd",
+        "pswd",
+        "passwort"
+)
+private val USERNAME_HEURISTIC_TERMS = listOf(
+        "user",
+        "name",
+        "email"
+)
+
+enum class CertaintyLevel {
+    Impossible,
+    Possible,
+    Likely,
+    Certain
+}
+
 @RequiresApi(Build.VERSION_CODES.O)
 class FormField(node: AssistStructure.ViewNode) {
     private val TAG = "FormField"
 
     val id = node.id
-    val idEntry = node.idEntry
-    val hint = node.hint
+    val idEntry = node.idEntry?.toLowerCase(Locale.US) ?: ""
+    val hint = node.hint?.toLowerCase(Locale.US) ?: ""
     val className = node.className
     val autofillId = node.autofillId
     val hasAutofillTypeText = node.autofillType == View.AUTOFILL_TYPE_TEXT
@@ -71,18 +99,27 @@ class FormField(node: AssistStructure.ViewNode) {
     val isAndroidTextField = className in ANDROID_TEXT_FIELD_CLASS_NAMES
 
     val isFillable = isVisible && (isAndroidTextField || isHtmlTextField) && hasAutofillTypeText && isCompatibleWithAutofillHints
+    val hasExcludedTerm = EXCLUDED_TERMS.any { idEntry.contains(it) || hint.contains(it) }
+    val shouldBeFilled = isFillable && !hasExcludedTerm
 
-    val isPossiblyPasswordField = isFillable && hasPasswordInputType
-    val isCertainlyPasswordField = isPossiblyPasswordField && (isHtmlPasswordField || hasAutofillHintPassword)
+    val isPossiblePasswordField = shouldBeFilled && hasPasswordInputType
+    val isCertainPasswordField = isPossiblePasswordField && (isHtmlPasswordField || hasAutofillHintPassword)
+    val isLikelyPasswordField = isCertainPasswordField || (PASSWORD_HEURISTIC_TERMS.any { idEntry.contains(it) || hint.contains(it) })
+    val passwordCertainty = if (isCertainPasswordField) CertaintyLevel.Certain else if (isLikelyPasswordField) CertaintyLevel.Likely else if (isPossiblePasswordField) CertaintyLevel.Possible else CertaintyLevel.Impossible
 
-    val isPossiblyUsernameField = isFillable && !isPossiblyPasswordField
-    val isCertainlyUsernameField = isPossiblyUsernameField && hasAutofillHintUsername
+    val isPossibleUsernameField = shouldBeFilled && !isPossiblePasswordField
+    val isCertainUsernameField = isPossibleUsernameField && hasAutofillHintUsername
+    val isLikelyUsernameField = isCertainUsernameField || (USERNAME_HEURISTIC_TERMS.any { idEntry.contains(it) || hint.contains(it) })
+    val usernameCertainty = if (isCertainUsernameField) CertaintyLevel.Certain else if (isLikelyUsernameField) CertaintyLevel.Likely else if (isPossibleUsernameField) CertaintyLevel.Possible else CertaintyLevel.Impossible
+
+    fun fillWith(builder: Dataset.Builder, value: String) {
+        Log.d(TAG, "Setting $autofillId to $value")
+        builder.setValue(autofillId, AutofillValue.forText(value))
+    }
 
     override fun toString(): String {
-        val password = if (isCertainlyPasswordField) "certainly" else if (isPossiblyPasswordField) "possibly" else "no"
-        val username = if (isCertainlyUsernameField) "certainly" else if (isPossiblyUsernameField) "possibly" else "no"
         val field = if (isHtmlTextField) "$htmlTag[type=$htmlInputType]" else className
         val description = "\"$hint\", $idEntry"
-        return "$field ($description): password=$password, username=$username"
+        return "$field ($description): password=$passwordCertainty, username=$usernameCertainty"
     }
 }

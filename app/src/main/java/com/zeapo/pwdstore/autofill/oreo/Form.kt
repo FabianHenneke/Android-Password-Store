@@ -1,11 +1,15 @@
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.app.assist.AssistStructure
-import android.net.Uri
+import android.content.Context
 import android.os.Build
+import android.service.autofill.Dataset
+import android.service.autofill.FillResponse
 import android.util.Log
 import android.view.autofill.AutofillId
+import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
+import com.zeapo.pwdstore.R
 
 private val AUTOFILL_BROWSERS = listOf("org.mozilla.focus",
         "org.mozilla.klar",
@@ -48,11 +52,14 @@ private val ACCESSIBILITY_BROWSERS = listOf("org.mozilla.firefox",
 private val ALL_BROWSERS = AUTOFILL_BROWSERS + ACCESSIBILITY_BROWSERS
 
 @RequiresApi(Build.VERSION_CODES.O)
-class Form(structure: AssistStructure) {
+class Form(structure: AssistStructure, context: Context) {
     private val TAG = "Form"
 
     val fillableFields = mutableListOf<FormField>()
     val ignoredIds = mutableListOf<AutofillId>()
+    val passwordFields by lazy { identifyPasswordFields() }
+    val usernameField by lazy { identifyUsernameField()}
+    val canBeFilled by lazy { usernameField != null || passwordFields.isNotEmpty() }
 
     var packageName = structure.activityComponent.packageName
     // TODO: Verify signature
@@ -60,8 +67,10 @@ class Form(structure: AssistStructure) {
     var originToFill: String? = null
 
     init {
-        Log.d(TAG, "Request from $packageName")
+        Log.d(TAG, "Request from $packageName (${context.getPackageVerificationId(packageName)})")
         parseStructure(structure)
+        Log.d(TAG, "Username field: $usernameField")
+        Log.d(TAG, "Password field(s): $passwordFields")
     }
 
     private fun parseStructure(structure: AssistStructure) {
@@ -72,8 +81,8 @@ class Form(structure: AssistStructure) {
 
     private fun parseViewNode(node: AssistStructure.ViewNode) {
         val field = FormField(node)
-        if (field.isFillable && shouldContinueBasedOnOrigin(node)) {
-            Log.d("Form", "Found fillable field: $field")
+        if (field.shouldBeFilled && shouldContinueBasedOnOrigin(node)) {
+            Log.d("Form", "$field")
             fillableFields.add(field)
         } else {
             // Log.d("Form", "Found non-fillable field: $field")
@@ -102,5 +111,77 @@ class Form(structure: AssistStructure) {
             return false
         }
         return true
+    }
+
+    private fun isSingleFieldOrAdjacentPair(fields: List<FormField>): Boolean {
+        if (fields.size == 1)
+            return true
+
+        if (fields.size != 2)
+            return false
+        val id0 = fillableFields.indexOf(fields[0])
+        val id1 = fillableFields.indexOf(fields[1])
+        return Math.abs(id0 - id1) == 1
+    }
+
+    private fun identifyPasswordFields(): List<FormField> {
+        val possiblePasswordFields = fillableFields.filter { it.passwordCertainty >= CertaintyLevel.Possible }
+        if (possiblePasswordFields.isEmpty())
+            return emptyList()
+        val certainPasswordFields = fillableFields.filter { it.passwordCertainty >= CertaintyLevel.Certain }
+        if (isSingleFieldOrAdjacentPair(certainPasswordFields))
+            return certainPasswordFields
+        val likelyPasswordFields = fillableFields.filter { it.passwordCertainty >= CertaintyLevel.Likely }
+        if (isSingleFieldOrAdjacentPair(likelyPasswordFields))
+            return likelyPasswordFields
+        if (isSingleFieldOrAdjacentPair(possiblePasswordFields))
+            return possiblePasswordFields
+        return emptyList()
+    }
+
+    private fun takeSingleFieldOrFirstBeforePasswordFields(fields: List<FormField>): FormField? {
+        if (fields.isEmpty())
+            return null
+        if (fields.size == 1)
+            return fields.first()
+
+        if (passwordFields.isEmpty())
+            return null
+        val firstPasswordIndex = fillableFields.indexOf(passwordFields.first())
+        return fields.last { fillableFields.indexOf(it) < firstPasswordIndex }
+    }
+
+    private fun identifyUsernameField(): FormField? {
+        val possibleUsernameFields = fillableFields.filter { it.usernameCertainty >= CertaintyLevel.Possible }
+        if (possibleUsernameFields.isEmpty())
+            return null
+        val certainUsernameFields = fillableFields.filter { it.usernameCertainty >= CertaintyLevel.Certain }
+        var result = takeSingleFieldOrFirstBeforePasswordFields(certainUsernameFields)
+        if (result != null)
+            return result
+        val likelyUsernameFields = fillableFields.filter { it.usernameCertainty >= CertaintyLevel.Likely }
+        result = takeSingleFieldOrFirstBeforePasswordFields(likelyUsernameFields)
+        if (result != null)
+            return result
+        return takeSingleFieldOrFirstBeforePasswordFields(possibleUsernameFields)
+    }
+
+    fun fillWith(username: String?, password: String, context: Context): FillResponse {
+        check(canBeFilled)
+        return FillResponse.Builder().run {
+            val remoteView = RemoteViews(context.packageName, R.layout.autofill_row_layout)
+            remoteView.setTextViewText(R.id.app_name, username)
+            val dataset = Dataset.Builder(remoteView).run {
+                if (username != null && usernameField != null)
+                    usernameField!!.fillWith(this, username)
+                for (passwordField in passwordFields) {
+                    passwordField.fillWith(this, password)
+                }
+                build()
+            }
+            addDataset(dataset)
+            setIgnoredIds(*ignoredIds.toTypedArray())
+            build()
+        }
     }
 }
