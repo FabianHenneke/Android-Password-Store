@@ -5,6 +5,16 @@ import android.os.CancellationSignal
 import android.service.autofill.*
 import android.util.Log
 import androidx.annotation.RequiresApi
+import com.zeapo.pwdstore.BuildConfig
+
+private val BLACKLISTED_PACKAGES = listOf(
+        BuildConfig.APPLICATION_ID,
+        "android",
+        "com.android.settings",
+        "com.android.systemui",
+        "com.oneplus.applocker",
+        "org.sufficientlysecure.keychain"
+)
 
 @RequiresApi(Build.VERSION_CODES.O)
 class OreoAutofillService : AutofillService() {
@@ -14,7 +24,7 @@ class OreoAutofillService : AutofillService() {
         if (request.fillContexts.size != 1)
             Log.d(TAG, "Unusual number of fillContexts: ${request.fillContexts.size}")
         val structureToFill = request.fillContexts.lastOrNull()?.structure
-        if (structureToFill == null) {
+        if (structureToFill == null || structureToFill.activityComponent.packageName in BLACKLISTED_PACKAGES) {
             callback.onSuccess(null)
             return
         }
