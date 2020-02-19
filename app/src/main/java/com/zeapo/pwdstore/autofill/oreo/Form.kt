@@ -163,12 +163,11 @@ class Form(structure: AssistStructure, context: Context) {
         return emptyList()
     }
 
-    private fun takeSingleFieldOrFirstBeforePasswordFields(fields: List<FormField>): FormField? {
+    private fun takeFirstBeforePasswordFields(fields: List<FormField>, alwaysTakeSingleField: Boolean = false): FormField? {
         if (fields.isEmpty())
             return null
-        if (fields.size == 1)
+        if (fields.size == 1 && alwaysTakeSingleField)
             return fields.first()
-
         if (passwordFields.isEmpty())
             return null
         val firstPasswordIndex = fillableFields.indexOf(passwordFields.first())
@@ -180,14 +179,14 @@ class Form(structure: AssistStructure, context: Context) {
         if (possibleUsernameFields.isEmpty())
             return null
         val certainUsernameFields = fillableFields.filter { it.usernameCertainty >= CertaintyLevel.Certain }
-        var result = takeSingleFieldOrFirstBeforePasswordFields(certainUsernameFields)
+        var result = takeFirstBeforePasswordFields(certainUsernameFields, alwaysTakeSingleField = true)
         if (result != null)
             return result
         val likelyUsernameFields = fillableFields.filter { it.usernameCertainty >= CertaintyLevel.Likely }
-        result = takeSingleFieldOrFirstBeforePasswordFields(likelyUsernameFields)
+        result = takeFirstBeforePasswordFields(likelyUsernameFields, alwaysTakeSingleField = true)
         if (result != null)
             return result
-        return takeSingleFieldOrFirstBeforePasswordFields(possibleUsernameFields)
+        return takeFirstBeforePasswordFields(possibleUsernameFields)
     }
 
     fun fillWith(username: String?, password: String, context: Context): FillResponse {
