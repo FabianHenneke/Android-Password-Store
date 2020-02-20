@@ -183,7 +183,7 @@ class Form(structure: AssistStructure, context: Context) {
         if (result != null)
             return result
         val likelyUsernameFields = fillableFields.filter { it.usernameCertainty >= CertaintyLevel.Likely }
-        result = takeFirstBeforePasswordFields(likelyUsernameFields, alwaysTakeSingleField = true)
+        result = takeFirstBeforePasswordFields(likelyUsernameFields)
         if (result != null)
             return result
         return takeFirstBeforePasswordFields(possibleUsernameFields)
