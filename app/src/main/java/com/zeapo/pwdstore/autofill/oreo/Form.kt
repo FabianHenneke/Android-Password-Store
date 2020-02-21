@@ -1,7 +1,9 @@
 package com.zeapo.pwdstore.autofill.oreo
 
+import android.app.PendingIntent
 import android.app.assist.AssistStructure
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.service.autofill.Dataset
 import android.service.autofill.FillResponse
@@ -10,6 +12,7 @@ import android.view.autofill.AutofillId
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import com.zeapo.pwdstore.R
+import java.io.File
 
 private val AUTOFILL_BROWSERS = listOf("org.mozilla.focus",
         "org.mozilla.klar",
@@ -201,6 +204,32 @@ class Form(structure: AssistStructure, context: Context) {
                 for (passwordField in passwordFields) {
                     passwordField.fillWith(this, password)
                 }
+                build()
+            }
+            addDataset(dataset)
+            setIgnoredIds(*ignoredIds.toTypedArray())
+            build()
+        }
+    }
+
+    fun fillWithAfterDecryption(file: File, context: Context): FillResponse {
+        check(canBeFilled)
+        return FillResponse.Builder().run {
+            val remoteView = RemoteViews(context.packageName, R.layout.oreo_autofill_dataset)
+            remoteView.setTextViewText(R.id.text1, origin.identifier)
+            remoteView.setTextViewText(R.id.text2, file.nameWithoutExtension)
+            val dataset = Dataset.Builder(remoteView).run {
+                if (usernameField != null)
+                    usernameField!!.fillWith(this, "PLACEHOLDER")
+                for (passwordField in passwordFields) {
+                    passwordField.fillWith(this, "PLACEHOLDER")
+                }
+                val placeholderDataset = PlaceholderDataset(usernameField?.autofillId, passwordFields.map { it.autofillId })
+                val decryptIntent = Intent(context, DecryptActivity::class.java).apply {
+                    putExtra(DecryptActivity.EXTRA_FILE_PATH, file.absolutePath)
+                    putExtra(DecryptActivity.EXTRA_PLACEHOLDER_DATASET, placeholderDataset)
+                }
+                setAuthentication(PendingIntent.getActivity(context, 0, decryptIntent, 0).intentSender)
                 build()
             }
             addDataset(dataset)

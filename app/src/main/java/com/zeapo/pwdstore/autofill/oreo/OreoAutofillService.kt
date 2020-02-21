@@ -6,6 +6,8 @@ import android.service.autofill.*
 import android.util.Log
 import androidx.annotation.RequiresApi
 import com.zeapo.pwdstore.BuildConfig
+import com.zeapo.pwdstore.utils.PasswordRepository
+import java.io.File
 
 private val BLACKLISTED_PACKAGES = listOf(
         BuildConfig.APPLICATION_ID,
@@ -35,7 +37,9 @@ class OreoAutofillService : AutofillService() {
             return
         }
         Log.d(TAG, "Sending a FillResponse")
-        callback.onSuccess(formToFill.fillWith("John Doe", "hunter2", this))
+//        callback.onSuccess(formToFill.fillWith("John Doe", "hunter2", this))
+        val file = File(PasswordRepository.getRepositoryDirectory(applicationContext).absolutePath + "/john@doe.org.gpg")
+        callback.onSuccess(formToFill.fillWithAfterDecryption(file, this))
     }
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
@@ -53,6 +57,5 @@ class OreoAutofillService : AutofillService() {
         }
         callback.onFailure("Couldn't save")
     }
-
 
 }
