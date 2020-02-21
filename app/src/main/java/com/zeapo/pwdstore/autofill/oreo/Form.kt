@@ -227,7 +227,8 @@ class Form(structure: AssistStructure, context: Context) {
                 val placeholderDataset = PlaceholderDataset(usernameField?.autofillId, passwordFields.map { it.autofillId })
                 val decryptIntent = Intent(context, DecryptActivity::class.java).apply {
                     putExtra(DecryptActivity.EXTRA_FILE_PATH, file.absolutePath)
-                    putExtra(DecryptActivity.EXTRA_PLACEHOLDER_DATASET, placeholderDataset)
+                    // TODO: workaround
+                    extras?.putParcelable(DecryptActivity.EXTRA_PLACEHOLDER_DATASET, placeholderDataset)
                 }
                 setAuthentication(PendingIntent.getActivity(context, 0, decryptIntent, 0).intentSender)
                 build()
