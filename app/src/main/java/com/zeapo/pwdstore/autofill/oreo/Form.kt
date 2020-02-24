@@ -103,6 +103,7 @@ class Form(structure: AssistStructure, context: Context) {
 
     private fun parseViewNode(node: AssistStructure.ViewNode) {
         val field = FormField(node)
+        // TODO: Improve origin detection by considering iframes and restricting to the list returned by adb shell settings get global autofill_compat_mode_allowed_packages
         if (shouldContinueBasedOnOrigin(node) && field.isFillable) {
             Log.d("Form", "$field")
             fillableFields.add(field)
