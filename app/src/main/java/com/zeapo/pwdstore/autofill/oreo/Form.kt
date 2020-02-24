@@ -13,7 +13,7 @@ import android.util.Log
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import androidx.annotation.RequiresApi
-import timber.log.Timber
+import com.zeapo.pwdstore.autofill.oreo.ui.DecryptActivity
 import java.io.File
 
 private val AUTOFILL_BROWSERS = listOf(
@@ -205,12 +205,6 @@ class Form(structure: AssistStructure, context: Context) {
         return takeFirstBeforePasswordFields(possibleUsernameFields)
     }
 
-    private fun makeDecryptIntent(file: File, context: Context): Intent {
-        return Intent(context, DecryptActivity::class.java).apply {
-            putExtra(DecryptActivity.EXTRA_FILE_PATH, file.absolutePath)
-        }
-    }
-
     private val clientState by lazy {
         Bundle(2).apply {
             putParcelable(BUNDLE_KEY_USERNAME_ID, usernameField?.autofillId)
@@ -226,8 +220,7 @@ class Form(structure: AssistStructure, context: Context) {
             for (passwordField in passwordFields) {
                 passwordField.fillWith(this, "PLACEHOLDER")
             }
-            val decryptIntent = makeDecryptIntent(file, context)
-            setAuthentication(PendingIntent.getActivity(context, decryptActivityRequestCode++, decryptIntent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender)
+            setAuthentication(DecryptActivity.makeDecryptFileIntentSender(file, context))
             build()
         }
     }
@@ -247,8 +240,6 @@ class Form(structure: AssistStructure, context: Context) {
 
         const val BUNDLE_KEY_USERNAME_ID = "usernameId"
         const val BUNDLE_KEY_PASSWORD_IDS = "passwordIds"
-
-        private var decryptActivityRequestCode = 1
 
         fun makeFillInDataset(credentials: Credentials, clientState: Bundle, context: Context): Dataset {
             val remoteView = makeRemoteView("PLACEHOLDER", "PLACEHOLDER", context)

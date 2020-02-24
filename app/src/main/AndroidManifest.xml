@@ -80,7 +80,7 @@
             android:windowSoftInputMode="adjustResize" />
         <activity android:name=".SelectFolderActivity" />
         <activity android:name=".sshkeygen.SshKeyGenActivity" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".autofill.oreo.DecryptActivity" />
+        <activity android:name=".autofill.oreo.ui.DecryptActivity" />
     </application>
 
 </manifest>

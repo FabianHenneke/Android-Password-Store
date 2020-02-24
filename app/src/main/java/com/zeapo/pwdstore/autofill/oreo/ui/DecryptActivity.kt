@@ -1,13 +1,17 @@
-package com.zeapo.pwdstore.autofill.oreo
+package com.zeapo.pwdstore.autofill.oreo.ui
 
 import android.app.Activity
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import android.os.Build
 import android.view.autofill.AutofillManager
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import com.zeapo.pwdstore.PasswordEntry
+import com.zeapo.pwdstore.autofill.oreo.Credentials
+import com.zeapo.pwdstore.autofill.oreo.Form
 import kotlinx.coroutines.*
 import me.msfjarvis.openpgpktx.util.OpenPgpApi
 import me.msfjarvis.openpgpktx.util.OpenPgpServiceConnection
@@ -70,14 +74,14 @@ class DecryptActivity : Activity(), CoroutineScope {
         val openPgpService = suspendCoroutine<IOpenPgpService2> { cont ->
             openPgpServiceConnection = OpenPgpServiceConnection(this, OPENPGP_PROVIDER,
                     object : OpenPgpServiceConnection.OnBound {
-                override fun onBound(service: IOpenPgpService2) {
-                    cont.resume(service)
-                }
+                        override fun onBound(service: IOpenPgpService2) {
+                            cont.resume(service)
+                        }
 
-                override fun onError(e: Exception) {
-                    cont.resumeWithException(e)
-                }
-            }).also { it.bindToService() }
+                        override fun onError(e: Exception) {
+                            cont.resumeWithException(e)
+                        }
+                    }).also { it.bindToService() }
         }
         return OpenPgpApi(this, openPgpService).executeApi(data, input, output).also {
             openPgpServiceConnection?.unbindFromService()
@@ -126,7 +130,7 @@ class DecryptActivity : Activity(), CoroutineScope {
                         }
                     }
                     decryptUsernameAndPassword(file, intentToResume)
-                } catch(e: Exception) {
+                } catch (e: Exception) {
                     Timber.tag(TAG).e(e)
                     null
                 }
@@ -160,9 +164,16 @@ class DecryptActivity : Activity(), CoroutineScope {
     }
 
     companion object {
-        const val TAG = "DecryptActivity"
-        const val EXTRA_FILE_PATH = "com.zeapo.pwdstore.autofill.oreo.EXTRA_FILE_PATH"
-        const val EXTRA_PLACEHOLDER_DATASET = "com.zeapo.pwdstore.autofill.oreo.EXTRA_PLACEHOLDER_DATASET"
+        var decryptFileRequestCode = 1
+        fun makeDecryptFileIntentSender(file: File, context: Context): IntentSender {
+            val intent = Intent(context, DecryptActivity::class.java).apply {
+                putExtra(EXTRA_FILE_PATH, file.absolutePath)
+            }
+            return PendingIntent.getActivity(context, decryptFileRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender
+        }
+
+        private const val TAG = "DecryptActivity"
+        private const val EXTRA_FILE_PATH = "com.zeapo.pwdstore.autofill.oreo.EXTRA_FILE_PATH"
         private const val REQUEST_CODE_CONTINUE_AFTER_USER_INTERACTION = 1
         private const val OPENPGP_PROVIDER = "org.sufficientlysecure.keychain"
     }
