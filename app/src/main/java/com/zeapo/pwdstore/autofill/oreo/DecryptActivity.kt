@@ -45,9 +45,10 @@ class DecryptActivity : Activity(), CoroutineScope {
             if (credentials == null) {
                 setResult(RESULT_CANCELED)
             } else {
+                val fillInDataset = Form.makeFillInDataset(credentials, clientState, this@DecryptActivity)
+                // TODO: Use filename if username is null?
                 withContext(Dispatchers.Main) {
                     Toast.makeText(applicationContext, "${credentials.username}/${credentials.password}", Toast.LENGTH_LONG).show()
-                    val fillInDataset = Form.makeFillInDataset(credentials, clientState, this@DecryptActivity)
                     setResult(RESULT_OK, Intent().apply {
                         putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, fillInDataset)
                     })
