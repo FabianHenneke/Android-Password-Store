@@ -1,9 +1,7 @@
 package com.zeapo.pwdstore.autofill.oreo
 
-import android.app.PendingIntent
 import android.app.assist.AssistStructure
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -13,7 +11,8 @@ import android.util.Log
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import androidx.annotation.RequiresApi
-import com.zeapo.pwdstore.autofill.oreo.ui.DecryptActivity
+import com.zeapo.pwdstore.autofill.oreo.ui.AutofillDecryptActivity
+import com.zeapo.pwdstore.autofill.oreo.ui.AutofillFilterView
 import java.io.File
 
 private val AUTOFILL_BROWSERS = listOf(
@@ -212,15 +211,20 @@ class Form(structure: AssistStructure, context: Context) {
         }
     }
 
-    private fun makePlaceholderDataset(file: File, context: Context): Dataset {
-        val remoteView = makeRemoteView(canonicalOrigin?.identifier ?: "", file.nameWithoutExtension, context)
+    private fun makePlaceholderDataset(file: File?, context: Context): Dataset {
+        val summary = file?.nameWithoutExtension ?: "Search..."
+        val remoteView = makeRemoteView(canonicalOrigin?.identifier ?: "", summary, context)
         return Dataset.Builder(remoteView).run {
             if (usernameField != null)
                 usernameField!!.fillWith(this, "PLACEHOLDER")
             for (passwordField in passwordFields) {
                 passwordField.fillWith(this, "PLACEHOLDER")
             }
-            setAuthentication(DecryptActivity.makeDecryptFileIntentSender(file, context))
+            val intent = if (file != null)
+                AutofillDecryptActivity.makeDecryptFileIntentSender(file, context)
+            else
+                AutofillFilterView.makeMatchAndDecryptFileIntentSender(context, canonicalOrigin?.identifier)
+            setAuthentication(intent)
             build()
         }
     }
@@ -230,6 +234,7 @@ class Form(structure: AssistStructure, context: Context) {
         return FillResponse.Builder().run {
             for (file in files)
                 addDataset(makePlaceholderDataset(file, context))
+            addDataset(makePlaceholderDataset(null, context))
             setClientState(clientState)
             setIgnoredIds(*ignoredIds.toTypedArray())
             build()

@@ -51,6 +51,7 @@ ext.deps = [
         jgit: 'org.eclipse.jgit:org.eclipse.jgit:3.7.1.201504261725-r',
         leakcanary: 'com.squareup.leakcanary:leakcanary-android:2.2',
         openpgp_ktx: 'com.github.android-password-store:openpgp-ktx:1.2.0',
+        recyclical: 'com.afollestad:recyclical:1.1.1',
         ssh_auth: 'org.sufficientlysecure:sshauthentication-api:1.0',
         timber: 'com.jakewharton.timber:timber:4.7.1',
         whatthestack: 'com.github.haroldadmin:WhatTheStack:0.0.1',

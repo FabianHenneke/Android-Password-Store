@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
 import android.os.Build
+import android.os.Bundle
 import android.view.autofill.AutofillManager
 import android.widget.Toast
 import androidx.annotation.RequiresApi
@@ -25,9 +26,32 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 @RequiresApi(Build.VERSION_CODES.O)
-class DecryptActivity : Activity(), CoroutineScope {
+class AutofillDecryptActivity : Activity(), CoroutineScope {
 
-    var continueAfterUserInteraction: Continuation<Intent>? = null
+    companion object {
+        private var decryptFileRequestCode = 1
+
+        fun makeDecryptFileIntent(file: File, forwardedExtras: Bundle, context: Context): Intent {
+            return Intent(context, AutofillDecryptActivity::class.java).apply {
+                putExtras(forwardedExtras)
+                putExtra(EXTRA_FILE_PATH, file.absolutePath)
+            }
+        }
+
+        fun makeDecryptFileIntentSender(file: File, context: Context): IntentSender {
+            val intent = Intent(context, AutofillDecryptActivity::class.java).apply {
+                putExtra(EXTRA_FILE_PATH, file.absolutePath)
+            }
+            return PendingIntent.getActivity(context, decryptFileRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender
+        }
+
+        private const val TAG = "DecryptActivity"
+        private const val EXTRA_FILE_PATH = "com.zeapo.pwdstore.autofill.oreo.EXTRA_FILE_PATH"
+        private const val REQUEST_CODE_CONTINUE_AFTER_USER_INTERACTION = 1
+        private const val OPENPGP_PROVIDER = "org.sufficientlysecure.keychain"
+    }
+
+    private var continueAfterUserInteraction: Continuation<Intent>? = null
 
     override val coroutineContext
         get() = Dispatchers.IO + SupervisorJob()
@@ -35,12 +59,12 @@ class DecryptActivity : Activity(), CoroutineScope {
     override fun onStart() {
         super.onStart()
         val filePath = intent?.getStringExtra(EXTRA_FILE_PATH) ?: run {
-            Timber.tag(TAG).e("DecryptActivity started without EXTRA_FILE_PATH")
+            Timber.tag(TAG).e("AutofillDecryptActivity started without EXTRA_FILE_PATH")
             finish()
             return
         }
         val clientState = intent?.getBundleExtra(AutofillManager.EXTRA_CLIENT_STATE) ?: run {
-            Timber.tag(TAG).e("DecryptActivity started without EXTRA_CLIENT_STATE")
+            Timber.tag(TAG).e("AutofillDecryptActivity started without EXTRA_CLIENT_STATE")
             finish()
             return
         }
@@ -49,7 +73,7 @@ class DecryptActivity : Activity(), CoroutineScope {
             if (credentials == null) {
                 setResult(RESULT_CANCELED)
             } else {
-                val fillInDataset = Form.makeFillInDataset(credentials, clientState, this@DecryptActivity)
+                val fillInDataset = Form.makeFillInDataset(credentials, clientState, this@AutofillDecryptActivity)
                 // TODO: Use filename if username is null?
                 withContext(Dispatchers.Main) {
                     Toast.makeText(applicationContext, "${credentials.username}/${credentials.password}", Toast.LENGTH_LONG).show()
@@ -161,21 +185,6 @@ class DecryptActivity : Activity(), CoroutineScope {
             }
             continueAfterUserInteraction = null
         }
-    }
-
-    companion object {
-        var decryptFileRequestCode = 1
-        fun makeDecryptFileIntentSender(file: File, context: Context): IntentSender {
-            val intent = Intent(context, DecryptActivity::class.java).apply {
-                putExtra(EXTRA_FILE_PATH, file.absolutePath)
-            }
-            return PendingIntent.getActivity(context, decryptFileRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender
-        }
-
-        private const val TAG = "DecryptActivity"
-        private const val EXTRA_FILE_PATH = "com.zeapo.pwdstore.autofill.oreo.EXTRA_FILE_PATH"
-        private const val REQUEST_CODE_CONTINUE_AFTER_USER_INTERACTION = 1
-        private const val OPENPGP_PROVIDER = "org.sufficientlysecure.keychain"
     }
 
 }

@@ -26,7 +26,8 @@ private val ANDROID_TEXT_FIELD_CLASS_NAMES = listOf(
         "android.widget.EditText",
         "android.widget.AutoCompleteTextView",
         "androidx.appcompat.widget.AppCompatEditText",
-        "android.support.v7.widget.AppCompatEditText")
+        "android.support.v7.widget.AppCompatEditText",
+        "com.google.android.material.textfield.TextInputEditText")
 
 private fun isPasswordInputType(inputType: Int): Boolean {
     val typeClass = inputType and InputType.TYPE_MASK_CLASS
