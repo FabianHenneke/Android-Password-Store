@@ -30,13 +30,13 @@ class DecryptActivity : Activity(), CoroutineScope {
 
     override fun onStart() {
         super.onStart()
-        val filePath = intent?.extras?.getString(EXTRA_FILE_PATH, null) ?: run {
+        val filePath = intent?.getStringExtra(EXTRA_FILE_PATH) ?: run {
             Timber.tag(TAG).e("DecryptActivity started without EXTRA_FILE_PATH")
             finish()
             return
         }
-        val placeholderDataset = intent?.extras?.getParcelable<PlaceholderDataset>(EXTRA_PLACEHOLDER_DATASET) ?: run {
-            Timber.tag(TAG).e("DecryptActivity started without EXTRA_PLACEHOLDER_DATASET")
+        val clientState = intent?.getBundleExtra(AutofillManager.EXTRA_CLIENT_STATE) ?: run {
+            Timber.tag(TAG).e("DecryptActivity started without EXTRA_CLIENT_STATE")
             finish()
             return
         }
@@ -46,10 +46,10 @@ class DecryptActivity : Activity(), CoroutineScope {
                 setResult(RESULT_CANCELED)
             } else {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(applicationContext, "${credentials.first}/${credentials.second}", Toast.LENGTH_LONG).show()
-                    val filledDataset = placeholderDataset.buildDataset(credentials)
+                    Toast.makeText(applicationContext, "${credentials.username}/${credentials.password}", Toast.LENGTH_LONG).show()
+                    val fillInDataset = Form.makeFillInDataset(credentials, clientState, this@DecryptActivity)
                     setResult(RESULT_OK, Intent().apply {
-                        putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, filledDataset)
+                        putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, fillInDataset)
                     })
                 }
             }
@@ -83,7 +83,7 @@ class DecryptActivity : Activity(), CoroutineScope {
         }
     }
 
-    private suspend fun decryptUsernameAndPassword(file: File, resumeIntent: Intent? = null): Pair<String?, String>? {
+    private suspend fun decryptUsernameAndPassword(file: File, resumeIntent: Intent? = null): Credentials? {
         val command = resumeIntent ?: Intent().apply {
             action = OpenPgpApi.ACTION_DECRYPT_VERIFY
         }
@@ -99,9 +99,9 @@ class DecryptActivity : Activity(), CoroutineScope {
                         PasswordEntry(decryptedOutput)
                     }
                     if (entry.hasUsername()) {
-                        Pair(entry.username, entry.password)
+                        Credentials(entry.username, entry.password)
                     } else {
-                        Pair(null, entry.password)
+                        Credentials(null, entry.password)
                     }
                 } catch (e: UnsupportedEncodingException) {
                     Timber.tag(TAG).e(e)

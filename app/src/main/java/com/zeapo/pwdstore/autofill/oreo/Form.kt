@@ -4,20 +4,24 @@ import android.app.PendingIntent
 import android.app.assist.AssistStructure
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.service.autofill.Dataset
 import android.service.autofill.FillResponse
 import android.util.Log
 import android.view.autofill.AutofillId
-import android.widget.RemoteViews
+import android.view.autofill.AutofillValue
 import androidx.annotation.RequiresApi
-import com.zeapo.pwdstore.R
+import timber.log.Timber
 import java.io.File
 
-private val AUTOFILL_BROWSERS = listOf("org.mozilla.focus",
+private val AUTOFILL_BROWSERS = listOf(
+        "org.mozilla.focus",
         "org.mozilla.klar",
         "com.duckduckgo.mobile.android")
-private val ACCESSIBILITY_BROWSERS = listOf("org.mozilla.firefox",
+private val ACCESSIBILITY_BROWSERS = listOf(
+        "org.mozilla.firefox",
         "org.mozilla.firefox_beta",
         "com.microsoft.emmx",
         "com.android.chrome",
@@ -74,7 +78,15 @@ class Form(structure: AssistStructure, context: Context) {
     private var originToFill: String? = null
 
     val canBeFilled by lazy { usernameField != null || passwordFields.isNotEmpty() }
-    val origin = if (isBrowser && originToFill != null) FormOrigin.Web(originToFill!!) else FormOrigin.App(packageName)
+    val canonicalOrigin: FormOrigin?
+        get() {
+            return if (isBrowser && originToFill != null) {
+                val host = Uri.parse(originToFill!!).host ?: return null
+                FormOrigin.Web(getCanonicalDomain(host) ?: return null)
+            } else {
+                FormOrigin.App(packageName)
+            }
+        }
 
     init {
         Log.d(TAG, "Request from $packageName (${context.getPackageVerificationId(packageName)})")
@@ -91,7 +103,7 @@ class Form(structure: AssistStructure, context: Context) {
 
     private fun parseViewNode(node: AssistStructure.ViewNode) {
         val field = FormField(node)
-        if (field.shouldBeFilled && shouldContinueBasedOnOrigin(node)) {
+        if (shouldContinueBasedOnOrigin(node) && field.isFillable) {
             Log.d("Form", "$field")
             fillableFields.add(field)
         } else {
@@ -192,50 +204,65 @@ class Form(structure: AssistStructure, context: Context) {
         return takeFirstBeforePasswordFields(possibleUsernameFields)
     }
 
-    fun fillWith(username: String?, password: String, context: Context): FillResponse {
+    private fun makeDecryptIntent(file: File, context: Context): Intent {
+        return Intent(context, DecryptActivity::class.java).apply {
+            putExtra(DecryptActivity.EXTRA_FILE_PATH, file.absolutePath)
+        }
+    }
+
+    private val clientState by lazy {
+        Bundle(2).apply {
+            putParcelable(BUNDLE_KEY_USERNAME_ID, usernameField?.autofillId)
+            putParcelableArrayList(BUNDLE_KEY_PASSWORD_IDS, passwordFields.map { it.autofillId }.toCollection(ArrayList()))
+        }
+    }
+
+    private fun makePlaceholderDataset(file: File, context: Context): Dataset {
+        val remoteView = makeRemoteView(canonicalOrigin?.identifier ?: "", file.nameWithoutExtension, context)
+        return Dataset.Builder(remoteView).run {
+            if (usernameField != null)
+                usernameField!!.fillWith(this, "PLACEHOLDER")
+            for (passwordField in passwordFields) {
+                passwordField.fillWith(this, "PLACEHOLDER")
+            }
+            val decryptIntent = makeDecryptIntent(file, context)
+            setAuthentication(PendingIntent.getActivity(context, decryptActivityRequestCode++, decryptIntent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender)
+            build()
+        }
+    }
+
+    fun fillWithAfterDecryption(files: List<File>, context: Context): FillResponse {
         check(canBeFilled)
         return FillResponse.Builder().run {
-            val remoteView = RemoteViews(context.packageName, R.layout.oreo_autofill_dataset)
-            remoteView.setTextViewText(R.id.text1, origin.identifier)
-            remoteView.setTextViewText(R.id.text2, username)
-            val dataset = Dataset.Builder(remoteView).run {
-                if (username != null && usernameField != null)
-                    usernameField!!.fillWith(this, username)
-                for (passwordField in passwordFields) {
-                    passwordField.fillWith(this, password)
-                }
-                build()
-            }
-            addDataset(dataset)
+            for (file in files)
+                addDataset(makePlaceholderDataset(file, context))
+            setClientState(clientState)
             setIgnoredIds(*ignoredIds.toTypedArray())
             build()
         }
     }
 
-    fun fillWithAfterDecryption(file: File, context: Context): FillResponse {
-        check(canBeFilled)
-        return FillResponse.Builder().run {
-            val remoteView = RemoteViews(context.packageName, R.layout.oreo_autofill_dataset)
-            remoteView.setTextViewText(R.id.text1, origin.identifier)
-            remoteView.setTextViewText(R.id.text2, file.nameWithoutExtension)
-            val dataset = Dataset.Builder(remoteView).run {
-                if (usernameField != null)
-                    usernameField!!.fillWith(this, "PLACEHOLDER")
-                for (passwordField in passwordFields) {
-                    passwordField.fillWith(this, "PLACEHOLDER")
+    companion object {
+
+        const val BUNDLE_KEY_USERNAME_ID = "usernameId"
+        const val BUNDLE_KEY_PASSWORD_IDS = "passwordIds"
+
+        private var decryptActivityRequestCode = 1
+
+        fun makeFillInDataset(credentials: Credentials, clientState: Bundle, context: Context): Dataset {
+            val remoteView = makeRemoteView("PLACEHOLDER", "PLACEHOLDER", context)
+            return Dataset.Builder(remoteView).run {
+                val usernameId = clientState.getParcelable<AutofillId>(BUNDLE_KEY_USERNAME_ID)
+                if (usernameId != null && credentials.username != null)
+                    setValue(usernameId, AutofillValue.forText(credentials.username))
+                val passwordIds = clientState.getParcelableArrayList<AutofillId>(BUNDLE_KEY_PASSWORD_IDS)
+                if (passwordIds != null) {
+                    for (passwordId in passwordIds) {
+                        setValue(passwordId, AutofillValue.forText(credentials.password))
+                    }
                 }
-                val placeholderDataset = PlaceholderDataset(usernameField?.autofillId, passwordFields.map { it.autofillId })
-                val decryptIntent = Intent(context, DecryptActivity::class.java).apply {
-                    putExtra(DecryptActivity.EXTRA_FILE_PATH, file.absolutePath)
-                    // TODO: workaround
-                    extras?.putParcelable(DecryptActivity.EXTRA_PLACEHOLDER_DATASET, placeholderDataset)
-                }
-                setAuthentication(PendingIntent.getActivity(context, 0, decryptIntent, 0).intentSender)
                 build()
             }
-            addDataset(dataset)
-            setIgnoredIds(*ignoredIds.toTypedArray())
-            build()
         }
     }
 }

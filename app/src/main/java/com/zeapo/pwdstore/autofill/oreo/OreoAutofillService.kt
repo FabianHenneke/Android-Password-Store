@@ -9,15 +9,6 @@ import com.zeapo.pwdstore.BuildConfig
 import com.zeapo.pwdstore.utils.PasswordRepository
 import java.io.File
 
-private val BLACKLISTED_PACKAGES = listOf(
-        BuildConfig.APPLICATION_ID,
-        "android",
-        "com.android.settings",
-        "com.android.systemui",
-        "com.oneplus.applocker",
-        "org.sufficientlysecure.keychain"
-)
-
 @RequiresApi(Build.VERSION_CODES.O)
 class OreoAutofillService : AutofillService() {
     private val TAG = "OreoAutofillService"
@@ -37,9 +28,9 @@ class OreoAutofillService : AutofillService() {
             return
         }
         Log.d(TAG, "Sending a FillResponse")
-//        callback.onSuccess(formToFill.fillWith("John Doe", "hunter2", this))
-        val file = File(PasswordRepository.getRepositoryDirectory(applicationContext).absolutePath + "/john@doe.org.gpg")
-        callback.onSuccess(formToFill.fillWithAfterDecryption(file, this))
+        val file1 = File(PasswordRepository.getRepositoryDirectory(applicationContext).absolutePath + "/john@doe.org.gpg")
+        val file2 = File(PasswordRepository.getRepositoryDirectory(applicationContext).absolutePath + "/jane@doe.org.gpg")
+        callback.onSuccess(formToFill.fillWithAfterDecryption(listOf(file1, file2), this))
     }
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
@@ -58,4 +49,14 @@ class OreoAutofillService : AutofillService() {
         callback.onFailure("Couldn't save")
     }
 
+    companion object {
+        private val BLACKLISTED_PACKAGES = listOf(
+                BuildConfig.APPLICATION_ID,
+                "android",
+                "com.android.settings",
+                "com.android.systemui",
+                "com.oneplus.applocker",
+                "org.sufficientlysecure.keychain"
+        )
+    }
 }

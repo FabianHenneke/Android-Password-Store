@@ -3,15 +3,18 @@ package com.zeapo.pwdstore.autofill.oreo
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.Parcel
 import android.os.Parcelable
 import android.service.autofill.Dataset
 import android.util.Base64
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
+import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
+import com.google.common.net.InternetDomainName
+import com.zeapo.pwdstore.R
 import kotlinx.android.parcel.Parcelize
 import java.security.MessageDigest
+
 
 private fun ByteArray.sha256(): ByteArray {
     return MessageDigest.getInstance("SHA-256").run {
@@ -50,15 +53,31 @@ fun Context.getPackageVerificationId(packageName: String): String? {
     return fullHash.base64()
 }
 
+fun getCanonicalDomain(domain: String): String? {
+    var idn = InternetDomainName.from(domain)
+    while (idn != null && !idn.isTopPrivateDomain)
+        idn = idn.parent()
+    return idn.toString()
+}
+
+data class Credentials(val username: String?, val password: String)
+
 @RequiresApi(Build.VERSION_CODES.O)
 @Parcelize
 data class PlaceholderDataset(val usernameId: AutofillId?, val passwordIds: List<AutofillId>) : Parcelable {
-    fun buildDataset(credentials: Pair<String?, String>): Dataset {
+    fun buildDataset(credentials: Credentials): Dataset {
         return Dataset.Builder().run {
-            usernameId?.let { if (credentials.first != null) setValue(it, AutofillValue.forText(credentials.first)) }
+            usernameId?.let { if (credentials.username != null) setValue(it, AutofillValue.forText(credentials.username)) }
             for (passwordId in passwordIds)
-                setValue(passwordId, AutofillValue.forText(credentials.second))
+                setValue(passwordId, AutofillValue.forText(credentials.password))
             build()
         }
+    }
+}
+
+fun makeRemoteView(title: String, summary: String, context: Context): RemoteViews {
+    return RemoteViews(context.packageName, R.layout.oreo_autofill_dataset).apply {
+        setTextViewText(R.id.text1, title)
+        setTextViewText(R.id.text2, summary)
     }
 }
