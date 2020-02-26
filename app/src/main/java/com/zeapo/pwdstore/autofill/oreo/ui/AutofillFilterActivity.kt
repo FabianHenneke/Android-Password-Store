@@ -137,6 +137,7 @@ class AutofillFilterView : AppCompatActivity() {
     }
 
     private fun recursiveFilter(filter: String, dir: File? = null, strict: Boolean = true) {
+        val root = PasswordRepository.getRepositoryDirectory(this)
         // on the root the pathStack is empty
         val passwordItems = if (dir == null) {
             PasswordRepository.getPasswords(PasswordRepository.getRepositoryDirectory(this), sortOrder)
@@ -149,10 +150,11 @@ class AutofillFilterView : AppCompatActivity() {
                 recursiveFilter(filter, item.file, strict = strict)
             }
 
+            // TODO: Implement fuzzy search if strict == false?
             val matches = if (strict)
                 item.file.parentFile.name.let { it == filter || it.endsWith(".$filter") || it.endsWith("://$filter") }
             else
-                "${item.file.absolutePath}/${item.file.nameWithoutExtension}".toLowerCase(Locale.getDefault()).contains(filter.toLowerCase(Locale.getDefault()))
+                "${item.file.relativeTo(root).path}/${item.file.nameWithoutExtension}".toLowerCase(Locale.getDefault()).contains(filter.toLowerCase(Locale.getDefault()))
 
             val inAdapter = dataSource.contains(item)
             if (item.type == PasswordItem.TYPE_PASSWORD && matches && !inAdapter) {
