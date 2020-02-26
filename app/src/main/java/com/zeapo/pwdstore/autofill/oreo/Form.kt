@@ -272,7 +272,8 @@ class Form(context: Context, structure: AssistStructure) {
         }
 
         return SaveInfo.Builder(saveDataTypes, idsToSave.toTypedArray()).run {
-            setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE)
+            if (isBrowser)
+                setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE)
             build()
         }
     }
