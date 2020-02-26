@@ -88,6 +88,7 @@
             android:taskAffinity=".view.AuthActivity"
             android:windowSoftInputMode="adjustNothing"
             android:theme="@style/NoBackgroundTheme" />
+        <activity android:name=".autofill.oreo.ui.AutofillSaveActivity" />
     </application>
 
 </manifest>

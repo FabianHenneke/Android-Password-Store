@@ -2,18 +2,24 @@ package com.zeapo.pwdstore.autofill.oreo
 
 import android.app.assist.AssistStructure
 import android.content.Context
+import android.content.IntentSender
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.service.autofill.Dataset
 import android.service.autofill.FillResponse
+import android.service.autofill.SaveInfo
 import android.util.Log
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import androidx.annotation.RequiresApi
+import com.zeapo.pwdstore.autofill.oreo.CertaintyLevel.*
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillDecryptActivity
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillFilterView
+import com.zeapo.pwdstore.autofill.oreo.ui.AutofillSaveActivity
 import java.io.File
+import kotlin.math.abs
 
 private val AUTOFILL_BROWSERS = listOf(
         "org.mozilla.focus",
@@ -60,10 +66,24 @@ private val ALL_BROWSERS = AUTOFILL_BROWSERS + ACCESSIBILITY_BROWSERS
 sealed class FormOrigin(open val identifier: String) {
     data class Web(override val identifier: String) : FormOrigin(identifier)
     data class App(override val identifier: String) : FormOrigin(identifier)
+
+    fun getPrettyIdentifier(context: Context, indicateTrust: Boolean = true): String {
+        return when (this) {
+            is Web -> identifier
+            is App -> {
+                val info = context.packageManager.getApplicationInfo(identifier, PackageManager.GET_META_DATA)
+                val label = context.packageManager.getApplicationLabel(info)
+                if (indicateTrust)
+                    "“$label”"
+                else
+                    "$label"
+            }
+        }
+    }
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-class Form(structure: AssistStructure, context: Context) {
+class Form(context: Context, structure: AssistStructure) {
     private val TAG = "Form"
 
     private val fillableFields = mutableListOf<FormField>()
@@ -76,19 +96,27 @@ class Form(structure: AssistStructure, context: Context) {
     private val isBrowser = packageName in ALL_BROWSERS
     private var originToFill: String? = null
 
-    val canBeFilled by lazy { usernameField != null || passwordFields.isNotEmpty() }
-    val canonicalOrigin: FormOrigin?
-        get() {
-            return if (isBrowser && originToFill != null) {
-                val host = Uri.parse(originToFill!!).host ?: return null
-                FormOrigin.Web(getCanonicalDomain(host) ?: return null)
-            } else {
-                FormOrigin.App(packageName)
-            }
+    val formOrigin by lazy {
+        if (isBrowser && originToFill != null) {
+            val host = Uri.parse(originToFill!!).host
+            if (host != null) {
+                val canonicalDomain = getCanonicalDomain(host)
+                if (canonicalDomain != null)
+                    FormOrigin.Web(canonicalDomain)
+                else
+                    null
+            } else
+                null
+        } else {
+            FormOrigin.App(packageName)
         }
+    }
+    val canBeFilled by lazy { (usernameField != null || passwordFields.isNotEmpty()) && formOrigin != null }
+    // TODO
+    val canBeSaved by lazy { passwordFields.isNotEmpty() && formOrigin != null }
 
     init {
-        Log.d(TAG, "Request from $packageName (${context.getPackageVerificationId(packageName)})")
+        Log.d(TAG, "Request from $packageName (${context.makePackageSignatureToken(packageName)})")
         parseStructure(structure)
         Log.d(TAG, "Username field: $usernameField")
         Log.d(TAG, "Password field(s): $passwordFields")
@@ -143,7 +171,7 @@ class Form(structure: AssistStructure, context: Context) {
             return false
         val id0 = fillableFields.indexOf(fields[0])
         val id1 = fillableFields.indexOf(fields[1])
-        return Math.abs(id0 - id1) == 1
+        return abs(id0 - id1) == 1
     }
 
     private fun isFocusedOrFollowsFocusedUsernameField(field: FormField): Boolean {
@@ -154,21 +182,21 @@ class Form(structure: AssistStructure, context: Context) {
         if (ownIndex == 0)
             return false
         val potentialUsernameField = fillableFields[ownIndex - 1]
-        if (!potentialUsernameField.isFocused || !potentialUsernameField.isLikelyUsernameField)
+        if (!potentialUsernameField.isFocused || potentialUsernameField.usernameCertainty < Likely)
             return false
         return true
     }
 
     private fun identifyPasswordFields(): List<FormField> {
-        val possiblePasswordFields = fillableFields.filter { it.passwordCertainty >= CertaintyLevel.Possible }
+        val possiblePasswordFields = fillableFields.filter { it.passwordCertainty >= Possible }
         if (possiblePasswordFields.isEmpty())
             return emptyList()
-        val certainPasswordFields = fillableFields.filter { it.passwordCertainty >= CertaintyLevel.Certain }
+        val certainPasswordFields = fillableFields.filter { it.passwordCertainty >= Certain }
         if (isSingleFieldOrAdjacentPair(certainPasswordFields))
             return certainPasswordFields
         if (certainPasswordFields.count { isFocusedOrFollowsFocusedUsernameField(it) } == 1)
             return certainPasswordFields.filter { isFocusedOrFollowsFocusedUsernameField(it) }
-        val likelyPasswordFields = fillableFields.filter { it.passwordCertainty >= CertaintyLevel.Likely }
+        val likelyPasswordFields = fillableFields.filter { it.passwordCertainty >= Likely }
         if (isSingleFieldOrAdjacentPair(likelyPasswordFields))
             return likelyPasswordFields
         if (likelyPasswordFields.count { isFocusedOrFollowsFocusedUsernameField(it) } == 1)
@@ -190,14 +218,14 @@ class Form(structure: AssistStructure, context: Context) {
     }
 
     private fun identifyUsernameField(): FormField? {
-        val possibleUsernameFields = fillableFields.filter { it.usernameCertainty >= CertaintyLevel.Possible }
+        val possibleUsernameFields = fillableFields.filter { it.usernameCertainty >= Possible }
         if (possibleUsernameFields.isEmpty())
             return null
-        val certainUsernameFields = fillableFields.filter { it.usernameCertainty >= CertaintyLevel.Certain }
+        val certainUsernameFields = fillableFields.filter { it.usernameCertainty >= Certain }
         var result = takeFirstBeforePasswordFields(certainUsernameFields, alwaysTakeSingleField = true)
         if (result != null)
             return result
-        val likelyUsernameFields = fillableFields.filter { it.usernameCertainty >= CertaintyLevel.Likely }
+        val likelyUsernameFields = fillableFields.filter { it.usernameCertainty >= Likely }
         result = takeFirstBeforePasswordFields(likelyUsernameFields)
         if (result != null)
             return result
@@ -211,9 +239,8 @@ class Form(structure: AssistStructure, context: Context) {
         }
     }
 
-    private fun makePlaceholderDataset(file: File?, context: Context): Dataset {
-        val summary = file?.nameWithoutExtension ?: "Search..."
-        val remoteView = makeRemoteView(canonicalOrigin?.identifier ?: "", summary, context)
+    private fun makeAuthenticationDataset(context: Context, file: File?): Dataset {
+        val remoteView = makeRemoteView(context, file, formOrigin!!)
         return Dataset.Builder(remoteView).run {
             if (usernameField != null)
                 usernameField!!.fillWith(this, "PLACEHOLDER")
@@ -223,21 +250,64 @@ class Form(structure: AssistStructure, context: Context) {
             val intent = if (file != null)
                 AutofillDecryptActivity.makeDecryptFileIntentSender(file, context)
             else
-                AutofillFilterView.makeMatchAndDecryptFileIntentSender(context, canonicalOrigin?.identifier)
+                AutofillFilterView.makeMatchAndDecryptFileIntentSender(context, formOrigin!!)
             setAuthentication(intent)
             build()
         }
     }
 
-    fun fillWithAfterDecryption(files: List<File>, context: Context): FillResponse {
+    private fun makeSaveInfo(): SaveInfo? {
+        // TODO: Support multi-step authentication flows
+        if (passwordFields.isEmpty())
+            return null
+
+        val idsToSave = passwordFields.map { it.autofillId }.toMutableList()
+        var saveDataTypes = SaveInfo.SAVE_DATA_TYPE_PASSWORD
+
+        usernameField?.let {
+            saveDataTypes = saveDataTypes or SaveInfo.SAVE_DATA_TYPE_USERNAME
+            idsToSave.add(it.autofillId)
+        }
+
+        return SaveInfo.Builder(saveDataTypes, idsToSave.toTypedArray()).run {
+            setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE)
+            build()
+        }
+    }
+
+    fun fillCredentials(context: Context, matchedFiles: List<File>): FillResponse {
         check(canBeFilled)
         return FillResponse.Builder().run {
-            for (file in files)
-                addDataset(makePlaceholderDataset(file, context))
-            addDataset(makePlaceholderDataset(null, context))
+            for (file in matchedFiles)
+                addDataset(makeAuthenticationDataset(context, file))
+            addDataset(makeAuthenticationDataset(context, null))
             setClientState(clientState)
             setIgnoredIds(*ignoredIds.toTypedArray())
+            val saveInfo = makeSaveInfo()
+            if (saveInfo != null)
+                setSaveInfo(saveInfo)
             build()
+        }
+    }
+
+    fun saveCredentials(context: Context): Pair<Boolean, IntentSender?> {
+        check(canBeSaved)
+        val usernameValue = usernameField?.autofillValue
+        val username = if (usernameValue?.isText == true) usernameValue.textValue else null
+        val passwordValue = passwordFields.first().autofillValue ?: return Pair(false, null)
+        val password = if (passwordValue.isText) passwordValue.textValue else return Pair(false, null)
+        // Do not store masked passwords
+        if (password.all { it == '*' || it == '•' })
+            return Pair(false, null)
+        val credentials = Credentials(username?.toString(), password.toString())
+        val saveIntentSender = AutofillSaveActivity.makeSaveIntentSender(context, credentials, formOrigin!!)
+        return if (Build.VERSION.SDK_INT >= 28) {
+            Pair(true, saveIntentSender)
+        } else {
+            // On SDKs < 28, we cannot advise the Autofill framework to launch the save intent in
+            // the context of the app that triggered the save request. Hence, we launch it here.
+            context.startIntentSender(saveIntentSender, null, 0, 0, 0)
+            Pair(true, null)
         }
     }
 
@@ -246,8 +316,8 @@ class Form(structure: AssistStructure, context: Context) {
         const val BUNDLE_KEY_USERNAME_ID = "usernameId"
         const val BUNDLE_KEY_PASSWORD_IDS = "passwordIds"
 
-        fun makeFillInDataset(credentials: Credentials, clientState: Bundle, context: Context): Dataset {
-            val remoteView = makeRemoteView("PLACEHOLDER", "PLACEHOLDER", context)
+        fun makeFillInDataset(context: Context, credentials: Credentials, clientState: Bundle): Dataset {
+            val remoteView = makePlaceholderRemoteView(context)
             return Dataset.Builder(remoteView).run {
                 val usernameId = clientState.getParcelable<AutofillId>(BUNDLE_KEY_USERNAME_ID)
                 if (usernameId != null && credentials.username != null)

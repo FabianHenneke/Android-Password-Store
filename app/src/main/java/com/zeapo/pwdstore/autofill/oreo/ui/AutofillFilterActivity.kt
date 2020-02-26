@@ -4,7 +4,6 @@
  */
 package com.zeapo.pwdstore.autofill.oreo.ui
 
-import android.annotation.SuppressLint
 import android.annotation.TargetApi
 import android.app.PendingIntent
 import android.content.Context
@@ -24,23 +23,30 @@ import com.afollestad.recyclical.datasource.dataSourceOf
 import com.afollestad.recyclical.setup
 import com.afollestad.recyclical.withItem
 import com.zeapo.pwdstore.R
+import com.zeapo.pwdstore.autofill.oreo.AutofillMatcher
+import com.zeapo.pwdstore.autofill.oreo.FormOrigin
 import com.zeapo.pwdstore.utils.PasswordItem
 import com.zeapo.pwdstore.utils.PasswordRepository
-import kotlinx.android.synthetic.main.activity_autofill_filter.*
+import kotlinx.android.synthetic.main.activity_oreo_autofill_filter.*
 import timber.log.Timber
 import java.io.File
+import java.util.*
 
 @TargetApi(Build.VERSION_CODES.O)
 class AutofillFilterView : AppCompatActivity() {
 
     companion object {
         private const val TAG = "AutofillFilterView"
-        private const val EXTRA_CANONICAL_DOMAIN = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_CANONICAL_DOMAIN"
+        private const val EXTRA_FORM_ORIGIN_WEB = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FORM_ORIGIN_WEB"
+        private const val EXTRA_FORM_ORIGIN_APP = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FORM_ORIGIN_APP"
         private var matchAndDecryptFileRequestCode = 1
 
-        fun makeMatchAndDecryptFileIntentSender(context: Context, canonicalDomain: String? = null): IntentSender {
+        fun makeMatchAndDecryptFileIntentSender(context: Context, formOrigin: FormOrigin): IntentSender {
             val intent = Intent(context, AutofillFilterView::class.java).apply {
-                canonicalDomain?.let { putExtra(EXTRA_CANONICAL_DOMAIN, it) }
+                when (formOrigin) {
+                    is FormOrigin.Web -> putExtra(EXTRA_FORM_ORIGIN_WEB, formOrigin.identifier)
+                    is FormOrigin.App -> putExtra(EXTRA_FORM_ORIGIN_APP, formOrigin.identifier)
+                }
             }
             return PendingIntent.getActivity(context, matchAndDecryptFileRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender
         }
@@ -50,20 +56,28 @@ class AutofillFilterView : AppCompatActivity() {
     private val preferences by lazy { PreferenceManager.getDefaultSharedPreferences(this) }
     private val sortOrder
         get() = PasswordRepository.PasswordSortOrder.getSortOrder(preferences)
-    private lateinit var initialFilter: String
+
+    private lateinit var formOrigin: FormOrigin
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_autofill_filter)
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        setContentView(R.layout.activity_oreo_autofill_filter)
 
         // TODO: TaskAffinity?
-        if (intent?.extras?.containsKey(AutofillManager.EXTRA_CLIENT_STATE) != true) {
+        if (intent?.hasExtra(AutofillManager.EXTRA_CLIENT_STATE) != true) {
             Timber.tag(TAG).e("AutofillFilterActivity started without EXTRA_CLIENT_STATE")
             finish()
             return
         }
-        initialFilter = intent?.extras?.getString(EXTRA_CANONICAL_DOMAIN) ?: ""
+        formOrigin = if (intent?.hasExtra(EXTRA_FORM_ORIGIN_WEB) == true) {
+            FormOrigin.Web(intent!!.getStringExtra(EXTRA_FORM_ORIGIN_WEB)!!)
+        } else if (intent?.hasExtra(EXTRA_FORM_ORIGIN_APP) == true) {
+            FormOrigin.App(intent!!.getStringExtra(EXTRA_FORM_ORIGIN_APP)!!)
+        } else {
+            Timber.tag(TAG).e("AutofillFilterActivity started without EXTRA_FORM_ORIGIN_WEB or EXTRA_FORM_ORIGIN_APP")
+            finish()
+            return
+        }
 
         supportActionBar?.hide()
         bindUI()
@@ -88,13 +102,24 @@ class AutofillFilterView : AppCompatActivity() {
         }
 
         search.addTextChangedListener { recursiveFilter(it.toString()) }
+        val initialFilter = formOrigin.getPrettyIdentifier(applicationContext, indicateTrust = false)
         search.setText(initialFilter, TextView.BufferType.EDITABLE)
-        recursiveFilter(initialFilter, strict = true)
+        recursiveFilter(initialFilter, strict = formOrigin is FormOrigin.Web)
 
-        overlay.setOnClickListener { finish() }
+        shouldMatch.apply {
+            text = getString(R.string.oreo_autofill_match_with, formOrigin.getPrettyIdentifier(applicationContext))
+        }
+
+        overlay.setOnClickListener {
+            finish()
+        }
     }
 
     private fun decryptAndFill(item: PasswordItem) {
+        if (shouldClear.isChecked)
+            AutofillMatcher.clearMatchesFor(applicationContext, formOrigin)
+        if (shouldMatch.isChecked)
+            AutofillMatcher.addMatchFor(applicationContext, formOrigin, item.file)
         // intent?.extras? is checked to be non-null in onCreate
         startActivityForResult(AutofillDecryptActivity.makeDecryptFileIntent(item.file, intent!!.extras!!, this), 1)
     }
@@ -108,7 +133,6 @@ class AutofillFilterView : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("DefaultLocale")
     private fun recursiveFilter(filter: String, dir: File? = null, strict: Boolean = true) {
         // on the root the pathStack is empty
         val passwordItems = if (dir == null) {
@@ -125,7 +149,7 @@ class AutofillFilterView : AppCompatActivity() {
             val matches = if (strict)
                 item.file.parentFile.name.let { it == filter || it.endsWith(".$filter") || it.endsWith("://$filter") }
             else
-                "${item.file.absolutePath}/${item.file.nameWithoutExtension}".toLowerCase().contains(filter.toLowerCase())
+                "${item.file.absolutePath}/${item.file.nameWithoutExtension}".toLowerCase(Locale.getDefault()).contains(filter.toLowerCase(Locale.getDefault()))
 
             val inAdapter = dataSource.contains(item)
             if (item.type == PasswordItem.TYPE_PASSWORD && matches && !inAdapter) {

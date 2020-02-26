@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentSender
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import android.view.autofill.AutofillManager
 import android.widget.Toast
 import androidx.annotation.RequiresApi
@@ -29,6 +30,11 @@ import kotlin.coroutines.suspendCoroutine
 class AutofillDecryptActivity : Activity(), CoroutineScope {
 
     companion object {
+        private const val TAG = "DecryptActivity"
+        private const val EXTRA_FILE_PATH = "com.zeapo.pwdstore.autofill.oreo.EXTRA_FILE_PATH"
+        private const val REQUEST_CODE_CONTINUE_AFTER_USER_INTERACTION = 1
+        private const val OPENPGP_PROVIDER = "org.sufficientlysecure.keychain"
+
         private var decryptFileRequestCode = 1
 
         fun makeDecryptFileIntent(file: File, forwardedExtras: Bundle, context: Context): Intent {
@@ -44,11 +50,6 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
             }
             return PendingIntent.getActivity(context, decryptFileRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender
         }
-
-        private const val TAG = "DecryptActivity"
-        private const val EXTRA_FILE_PATH = "com.zeapo.pwdstore.autofill.oreo.EXTRA_FILE_PATH"
-        private const val REQUEST_CODE_CONTINUE_AFTER_USER_INTERACTION = 1
-        private const val OPENPGP_PROVIDER = "org.sufficientlysecure.keychain"
     }
 
     private var continueAfterUserInteraction: Continuation<Intent>? = null
@@ -73,10 +74,8 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
             if (credentials == null) {
                 setResult(RESULT_CANCELED)
             } else {
-                val fillInDataset = Form.makeFillInDataset(credentials, clientState, this@AutofillDecryptActivity)
-                // TODO: Use filename if username is null?
+                val fillInDataset = Form.makeFillInDataset(this@AutofillDecryptActivity, credentials, clientState)
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(applicationContext, "${credentials.username}/${credentials.password}", Toast.LENGTH_LONG).show()
                     setResult(RESULT_OK, Intent().apply {
                         putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, fillInDataset)
                     })
@@ -127,11 +126,7 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
                     val entry = withContext(Dispatchers.IO) {
                         PasswordEntry(decryptedOutput)
                     }
-                    if (entry.hasUsername()) {
-                        Credentials(entry.username, entry.password)
-                    } else {
-                        Credentials(null, entry.password)
-                    }
+                    Credentials.fromStoreEntry(file, entry)
                 } catch (e: UnsupportedEncodingException) {
                     Timber.tag(TAG).e(e)
                     null

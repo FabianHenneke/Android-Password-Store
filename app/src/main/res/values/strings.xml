@@ -244,6 +244,10 @@
     <string name="app_icon_hint">App icon</string>
     <string name="folder_icon_hint">Folder icon</string>
 
+    <!-- Oreo Autofill -->
+    <string name="oreo_autofill_match_with">Match with %1$s</string>
+    <string name="oreo_autofill_delete_old_matches">Delete old matches</string>
+
     <!-- Autofill -->
     <string name="autofill_description">Autofills password fields in apps. Only works for Android versions 4.3 and up. Does not rely on the clipboard for Android versions 5.0 and up.</string>
     <string name="autofill_apps_default">Use default setting</string>

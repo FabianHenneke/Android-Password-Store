@@ -81,6 +81,9 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
     private var editPass: String? = null
     private var editExtra: String? = null
 
+    private val suggestedPass: String? by lazy { intent.getStringExtra("SUGGESTED_PASS") }
+    private val suggestedExtra: String? by lazy { intent.getStringExtra("SUGGESTED_EXTRA") }
+
     private val operation: String by lazy { intent.getStringExtra("OPERATION") }
     private val repoPath: String by lazy { intent.getStringExtra("REPO_PATH") }
 
@@ -160,6 +163,8 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
 
                 title = getString(R.string.new_password_title)
                 crypto_password_category.text = getRelativePath(fullPath, repoPath)
+                suggestedPass?.let { crypto_password_edit.setText(it) }
+                suggestedExtra?.let { crypto_extra_edit.setText(it) }
             }
         }
     }

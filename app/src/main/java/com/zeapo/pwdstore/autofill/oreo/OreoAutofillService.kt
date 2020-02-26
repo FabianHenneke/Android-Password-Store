@@ -1,17 +1,27 @@
 package com.zeapo.pwdstore.autofill.oreo
 
+import android.annotation.SuppressLint
 import android.os.Build
 import android.os.CancellationSignal
 import android.service.autofill.*
 import android.util.Log
 import androidx.annotation.RequiresApi
 import com.zeapo.pwdstore.BuildConfig
-import com.zeapo.pwdstore.utils.PasswordRepository
-import java.io.File
 
 @RequiresApi(Build.VERSION_CODES.O)
 class OreoAutofillService : AutofillService() {
-    private val TAG = "OreoAutofillService"
+
+    companion object {
+        private const val TAG = "OreoAutofillService"
+        private val BLACKLISTED_PACKAGES = listOf(
+                BuildConfig.APPLICATION_ID,
+                "android",
+                "com.android.settings",
+                "com.android.systemui",
+                "com.oneplus.applocker",
+                "org.sufficientlysecure.keychain"
+        )
+    }
 
     override fun onFillRequest(request: FillRequest, cancellationSignal: CancellationSignal, callback: FillCallback) {
         if (request.fillContexts.size != 1)
@@ -21,42 +31,44 @@ class OreoAutofillService : AutofillService() {
             callback.onSuccess(null)
             return
         }
-        val formToFill = Form(structureToFill, this)
+        val formToFill = Form(this, structureToFill)
         if (!formToFill.canBeFilled) {
             Log.d(TAG, "Form cannot be filled")
             callback.onSuccess(null)
             return
         }
         Log.d(TAG, "Sending a FillResponse")
-        val file1 = File(PasswordRepository.getRepositoryDirectory(applicationContext).absolutePath + "/john@doe.org.gpg")
-        val file2 = File(PasswordRepository.getRepositoryDirectory(applicationContext).absolutePath + "/jane@doe.org.gpg")
-        callback.onSuccess(formToFill.fillWithAfterDecryption(listOf(file1, file2), this))
+        val matchedFiles = AutofillMatcher.getMatchesFor(applicationContext, formToFill.formOrigin!!)
+        callback.onSuccess(formToFill.fillCredentials(this, matchedFiles))
     }
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
+        Log.d(TAG, "onSaveRequest() called")
         if (request.fillContexts.size != 1)
             Log.d(TAG, "Unusual number of fillContexts: ${request.fillContexts.size}")
         val structureToFill = request.fillContexts.lastOrNull()?.structure
         if (structureToFill == null) {
-            callback.onFailure("Couldn't save")
+            callback.onFailure("Failed to save credentials")
             return
         }
-        val formToFill = Form(structureToFill, this)
-        if (!formToFill.canBeFilled) {
-            callback.onFailure("Couldn't save")
+        val formToFill = Form(this, structureToFill)
+        if (!formToFill.canBeSaved) {
+            callback.onFailure("Failed to save credentials")
             return
         }
-        callback.onFailure("Couldn't save")
-    }
-
-    companion object {
-        private val BLACKLISTED_PACKAGES = listOf(
-                BuildConfig.APPLICATION_ID,
-                "android",
-                "com.android.settings",
-                "com.android.systemui",
-                "com.oneplus.applocker",
-                "org.sufficientlysecure.keychain"
-        )
+        val (couldSave, intent) = formToFill.saveCredentials(this)
+        if (couldSave) {
+            if (intent != null) {
+                if (Build.VERSION.SDK_INT >= 28) {
+                    callback.onSuccess(intent)
+                } else {
+                    throw IllegalStateException("saveCredentials returned intent, but SDK_INT < 28")
+                }
+            } else {
+                callback.onSuccess()
+            }
+        } else {
+            callback.onFailure("Failed to save credentials")
+        }
     }
 }
