@@ -57,15 +57,10 @@ fun getCanonicalDomain(domain: String): String? {
 data class Credentials(val username: String?, val password: String) {
     companion object {
         fun fromStoreEntry(file: File, entry: PasswordEntry): Credentials {
-            if (entry.hasUsername())
-                return Credentials(entry.username, entry.password)
-
-            val filename = file.nameWithoutExtension
-            // FIXME: Decide whether the filename should always be treated as a username
-            return if (filename.contains("@") || !filename.contains(" "))
-                Credentials(filename, entry.password)
+            return if (entry.hasUsername())
+                Credentials(entry.username, entry.password)
             else
-                Credentials(null, entry.password)
+                Credentials(file.nameWithoutExtension, entry.password)
         }
     }
 }
