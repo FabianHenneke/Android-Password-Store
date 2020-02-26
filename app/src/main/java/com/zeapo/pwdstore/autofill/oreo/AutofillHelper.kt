@@ -70,28 +70,32 @@ data class Credentials(val username: String?, val password: String) {
     }
 }
 
-private fun makeRemoteView(context: Context, title: String, summary: String): RemoteViews {
+private fun makeRemoteView(context: Context, title: String, summary: String, iconRes: Int): RemoteViews {
     return RemoteViews(context.packageName, R.layout.oreo_autofill_dataset).apply {
         setTextViewText(R.id.title, title)
         setTextViewText(R.id.summary, summary)
+        setImageViewResource(R.id.icon, iconRes)
     }
 }
 
 fun makeRemoteView(context: Context, file: File?, formOrigin: FormOrigin): RemoteViews {
     val title: String
     val summary: String
+    val iconRes: Int
     if (file != null) {
         title = formOrigin.getPrettyIdentifier(context, indicateTrust = false)
         summary = file.nameWithoutExtension
+        iconRes = R.drawable.ic_person_black_24dp
     } else {
         title = formOrigin.getPrettyIdentifier(context, indicateTrust = true)
         summary = context.getString(R.string.oreo_autofill_search_in_store)
+        iconRes = R.mipmap.ic_launcher
     }
-    return makeRemoteView(context, title, summary)
+    return makeRemoteView(context, title, summary, iconRes)
 }
 
 fun makePlaceholderRemoteView(context: Context): RemoteViews {
-    return makeRemoteView(context, "PLACEHOLDER", "PLACEHOLDER")
+    return makeRemoteView(context, "PLACEHOLDER", "PLACEHOLDER", R.mipmap.ic_launcher)
 }
 
 @RequiresApi(Build.VERSION_CODES.O)

@@ -94,7 +94,7 @@ class Form(context: Context, structure: AssistStructure) {
     private val usernameField by lazy { identifyUsernameField() }
 
     private var packageName = structure.activityComponent.packageName
-    // TODO: Verify signature
+    // FIXME: Verify signature
     private val isBrowser = packageName in ALL_BROWSERS
     private var originToFill: String? = null
 
@@ -114,7 +114,7 @@ class Form(context: Context, structure: AssistStructure) {
         }
     }
     val canBeFilled by lazy { (usernameField != null || passwordFields.isNotEmpty()) && formOrigin != null }
-    // TODO
+    // FIXME
     val canBeSaved by lazy { passwordFields.isNotEmpty() && formOrigin != null }
 
     init {
@@ -132,7 +132,7 @@ class Form(context: Context, structure: AssistStructure) {
 
     private fun parseViewNode(node: AssistStructure.ViewNode) {
         val field = FormField(node)
-        // TODO: Improve origin detection by considering iframes and restricting to the list returned by adb shell settings get global autofill_compat_mode_allowed_packages
+        // FIXME: Improve origin detection by considering iframes and restricting to the list returned by adb shell settings get global autofill_compat_mode_allowed_packages
         if (shouldContinueBasedOnOrigin(node) && field.isFillable) {
             Log.d("Form", "$field")
             fillableFields.add(field)

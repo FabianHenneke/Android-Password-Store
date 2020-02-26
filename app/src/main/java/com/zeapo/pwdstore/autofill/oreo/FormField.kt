@@ -102,7 +102,7 @@ class FormField(node: AssistStructure.ViewNode) {
     private val isHtmlField = htmlTag == "input"
     private val isHtmlPasswordField = isHtmlField && htmlInputType in HTML_INPUT_FIELD_TYPES_PASSWORD
     private val isHtmlTextField = isHtmlField && htmlInputType in HTML_INPUT_FIELD_TYPES_FILLABLE
-    // TODO: Detect W3C hints: https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#autofilling-form-controls%3A-the-autocomplete-attribute
+    // FIXME: Detect W3C hints: https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#autofilling-form-controls%3A-the-autocomplete-attribute
 
     private val isAndroidTextField = className in ANDROID_TEXT_FIELD_CLASS_NAMES
 

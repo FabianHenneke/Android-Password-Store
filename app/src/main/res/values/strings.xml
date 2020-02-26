@@ -250,7 +250,7 @@
     <string name="oreo_autofill_search_in_store">Search in store…</string>
     <string name="oreo_autofill_save_app_not_supported">This app is currently not supported</string>
     <string name="oreo_autofill_save_no_password_field">Can only fill single-step login forms</string>
-    <string name="oreo_autofill_save_invalid_password">Couldn\'t extract password; try a different browser</string>
+    <string name="oreo_autofill_save_invalid_password">Couldn\'t extract password, please use a different browser for now</string>
 
     <!-- Autofill -->
     <string name="autofill_description">Autofills password fields in apps. Only works for Android versions 4.3 and up. Does not rely on the clipboard for Android versions 5.0 and up.</string>

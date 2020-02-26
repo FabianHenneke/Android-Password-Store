@@ -63,7 +63,6 @@ class AutofillFilterView : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_oreo_autofill_filter)
 
-        // TODO: TaskAffinity?
         if (intent?.hasExtra(AutofillManager.EXTRA_CLIENT_STATE) != true) {
             Timber.tag(TAG).e("AutofillFilterActivity started without EXTRA_CLIENT_STATE")
             finish()

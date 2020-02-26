@@ -115,10 +115,10 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
         val command = resumeIntent ?: Intent().apply {
             action = OpenPgpApi.ACTION_DECRYPT_VERIFY
         }
-        // TODO catch
+        // FIXME catch
         val encryptedInput = file.inputStream()
         val decryptedOutput = ByteArrayOutputStream()
-        // TODO catch
+        // FIXME catch
         val result = executeOpenPgpApi(command, encryptedInput, decryptedOutput)
         return when (val resultCode = result?.getIntExtra(OpenPgpApi.RESULT_CODE, OpenPgpApi.RESULT_CODE_ERROR)) {
             OpenPgpApi.RESULT_CODE_SUCCESS -> {

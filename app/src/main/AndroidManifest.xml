@@ -85,10 +85,10 @@
             android:name=".autofill.oreo.ui.AutofillFilterView"
             android:configChanges="orientation|keyboardHidden"
             android:screenOrientation="portrait"
-            android:taskAffinity=".view.AuthActivity"
             android:windowSoftInputMode="adjustNothing"
             android:theme="@style/NoBackgroundTheme" />
-        <activity android:name=".autofill.oreo.ui.AutofillSaveActivity" />
+        <activity android:name=".autofill.oreo.ui.AutofillSaveActivity"
+            android:theme="@style/NoBackgroundTheme"/>
     </application>
 
 </manifest>
