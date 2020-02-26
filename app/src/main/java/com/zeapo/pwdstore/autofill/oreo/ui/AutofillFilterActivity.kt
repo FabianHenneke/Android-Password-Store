@@ -104,7 +104,7 @@ class AutofillFilterView : AppCompatActivity() {
             }
         }
 
-        search.addTextChangedListener { recursiveFilter(it.toString()) }
+        search.addTextChangedListener { recursiveFilter(it.toString(), strict = false) }
         val initialFilter = formOrigin.getPrettyIdentifier(applicationContext, indicateTrust = false)
         search.setText(initialFilter, TextView.BufferType.EDITABLE)
         recursiveFilter(initialFilter, strict = formOrigin is FormOrigin.Web)
