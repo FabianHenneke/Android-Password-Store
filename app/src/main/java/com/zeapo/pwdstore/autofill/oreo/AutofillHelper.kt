@@ -24,42 +24,23 @@ private fun ByteArray.base64(): String {
     return Base64.encodeToString(this, Base64.NO_WRAP)
 }
 
-private fun combineHashes(hashes: List<ByteArray>): ByteArray {
-    return MessageDigest.getInstance("SHA-256").run {
-        for (hash in hashes)
-            update(hash)
-        digest()
-    }
+private fun stableHash(array: Collection<ByteArray>): String {
+    val hashes = array.map { it.sha256().base64() }
+    return hashes.sorted().joinToString(separator = ";")
 }
 
-object LexicographicCompare : Comparator<ByteArray> {
-    override fun compare(a: ByteArray, b: ByteArray): Int {
-        val minLength = a.size.coerceAtMost(b.size)
-        for (i in 0 until minLength) {
-            if (a[i] != b[i])
-                return a[i].toInt() - b[i].toInt()
-        }
-        return a.size - b.size
+fun computeCertificatesHash(context: Context, packageName: String): String {
+    val signaturesOld = context.packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
+    val stableHashOld = stableHash(signaturesOld.map { it.toByteArray() })
+    if (Build.VERSION.SDK_INT >= 28) {
+        val info = context.packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+        val signaturesNew = info.signingInfo.signingCertificateHistory
+                ?: info.signingInfo.apkContentsSigners
+        val stableHashNew = stableHash(signaturesNew.map { it.toByteArray() })
+        if (stableHashNew != stableHashOld)
+            Timber.tag("SignatureToken").e("Mismatch between old and new hash: $stableHashNew != $stableHashOld")
     }
-}
-
-fun Context.makePackageSignatureToken(packageName: String): String {
-    val signatures = if (Build.VERSION.SDK_INT >= 28) {
-        val info = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-        info.signingInfo.signingCertificateHistory ?: info.signingInfo.apkContentsSigners
-    } else {
-        packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
-    }
-    val signatureHashes = signatures.map { it.toByteArray().sha256() }
-    val fullHash = combineHashes(signatureHashes.sortedWith(LexicographicCompare))
-    return fullHash.base64().also { newHash ->
-        // FIXME: Remove after testing
-        val oldSignatures = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
-        val oldHashes = oldSignatures.map { it.toByteArray().sha256() }
-        val oldHash = combineHashes(oldHashes.sortedWith(LexicographicCompare)).base64()
-        if (oldHash != newHash)
-            Timber.tag("SignatureToken").e("Mismatch: $oldHash != $newHash")
-    }
+    return stableHashOld
 }
 
 fun getCanonicalDomain(domain: String): String? {
@@ -76,6 +57,7 @@ data class Credentials(val username: String?, val password: String) {
                 return Credentials(entry.username, entry.password)
 
             val filename = file.nameWithoutExtension
+            // FIXME: Decide whether the filename should always be treated as a username
             return if (filename.contains("@") || !filename.contains(" "))
                 Credentials(filename, entry.password)
             else
@@ -99,7 +81,7 @@ fun makeRemoteView(context: Context, file: File?, formOrigin: FormOrigin): Remot
         summary = file.nameWithoutExtension
     } else {
         title = formOrigin.getPrettyIdentifier(context, indicateTrust = true)
-        summary = "Search in store..."
+        summary = context.getString(R.string.oreo_autofill_search_in_store)
     }
     return makeRemoteView(context, title, summary)
 }

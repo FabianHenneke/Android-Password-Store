@@ -20,6 +20,8 @@ class AutofillSaveActivity : Activity() {
         private const val EXTRA_FOLDER_NAME = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FOLDER_NAME"
         private const val EXTRA_PASSWORD = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_PASSWORD"
         private const val EXTRA_USERNAME = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_USERNAME"
+        private const val EXTRA_SHOULD_MATCH_APP = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_SHOULD_MATCH_APP"
+        private const val EXTRA_SHOULD_MATCH_WEB = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_SHOULD_MATCH_WEB"
 
         private var saveRequestCode = 1
 
@@ -32,7 +34,9 @@ class AutofillSaveActivity : Activity() {
                 putExtras(bundleOf(
                         EXTRA_FOLDER_NAME to folderName,
                         EXTRA_PASSWORD to credentials.password,
-                        EXTRA_USERNAME to credentials.username
+                        EXTRA_USERNAME to credentials.username,
+                        EXTRA_SHOULD_MATCH_APP to formOrigin.identifier.takeIf { formOrigin is FormOrigin.App },
+                        EXTRA_SHOULD_MATCH_WEB to formOrigin.identifier.takeIf { formOrigin is FormOrigin.Web }
                 ))
             }
             return PendingIntent.getActivity(context, saveRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender
@@ -51,7 +55,9 @@ class AutofillSaveActivity : Activity() {
                     "FILE_PATH" to repo.resolve(intent.getStringExtra(EXTRA_FOLDER_NAME)).absolutePath,
                     "OPERATION" to "ENCRYPT",
                     "SUGGESTED_PASS" to intent.getStringExtra(EXTRA_PASSWORD),
-                    "SUGGESTED_EXTRA" to suggestedExtra
+                    "SUGGESTED_EXTRA" to suggestedExtra,
+                    "SHOULD_MATCH_APP" to intent.getStringExtra(EXTRA_SHOULD_MATCH_APP),
+                    "SHOULD_MATCH_WEB" to intent.getStringExtra(EXTRA_SHOULD_MATCH_WEB)
             ))
         }
         startActivityForResult(saveIntent, PasswordStore.REQUEST_CODE_ENCRYPT)

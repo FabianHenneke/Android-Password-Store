@@ -13,11 +13,13 @@ class OreoAutofillService : AutofillService() {
 
     companion object {
         private const val TAG = "OreoAutofillService"
+        // FIXME: Add a configurable blacklist
         private val BLACKLISTED_PACKAGES = listOf(
                 BuildConfig.APPLICATION_ID,
                 "android",
                 "com.android.settings",
                 "com.android.systemui",
+                "com.android.vending",
                 "com.oneplus.applocker",
                 "org.sufficientlysecure.keychain"
         )

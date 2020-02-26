@@ -116,7 +116,7 @@ class Form(context: Context, structure: AssistStructure) {
     val canBeSaved by lazy { passwordFields.isNotEmpty() && formOrigin != null }
 
     init {
-        Log.d(TAG, "Request from $packageName (${context.makePackageSignatureToken(packageName)})")
+        Log.d(TAG, "Request from $packageName (${computeCertificatesHash(context, packageName)})")
         parseStructure(structure)
         Log.d(TAG, "Username field: $usernameField")
         Log.d(TAG, "Password field(s): $passwordFields")
@@ -136,7 +136,7 @@ class Form(context: Context, structure: AssistStructure) {
             fillableFields.add(field)
         } else {
             // Log.d("Form", "Found non-fillable field: $field")
-            field.autofillId?.let { ignoredIds.add(it) }
+            ignoredIds.add(field.autofillId)
         }
 
         for (i in 0 until node.childCount) {

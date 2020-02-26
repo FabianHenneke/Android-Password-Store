@@ -39,6 +39,8 @@ import com.zeapo.pwdstore.ClipboardService
 import com.zeapo.pwdstore.PasswordEntry
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.UserPreference
+import com.zeapo.pwdstore.autofill.oreo.AutofillMatcher
+import com.zeapo.pwdstore.autofill.oreo.FormOrigin
 import com.zeapo.pwdstore.ui.dialogs.PasswordGeneratorDialogFragment
 import com.zeapo.pwdstore.ui.dialogs.XkPasswordGeneratorDialogFragment
 import com.zeapo.pwdstore.utils.Otp
@@ -83,6 +85,18 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
 
     private val suggestedPass: String? by lazy { intent.getStringExtra("SUGGESTED_PASS") }
     private val suggestedExtra: String? by lazy { intent.getStringExtra("SUGGESTED_EXTRA") }
+
+    private val shouldMatchWith: FormOrigin? by lazy {
+        val shouldMatchApp: String? = intent.getStringExtra("SHOULD_MATCH_APP")
+        val shouldMatchWeb: String? = intent.getStringExtra("SHOULD_MATCH_WEB")
+        if (shouldMatchApp != null && shouldMatchWeb == null) {
+            FormOrigin.App(shouldMatchApp)
+        } else if (shouldMatchApp == null && shouldMatchWeb != null) {
+            FormOrigin.Web(shouldMatchWeb)
+        } else {
+            null
+        }
+    }
 
     private val operation: String by lazy { intent.getStringExtra("OPERATION") }
     private val repoPath: String by lazy { intent.getStringExtra("REPO_PATH") }
@@ -513,6 +527,13 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
                                     returnIntent.putExtra("OPERATION", "EDIT")
                                     returnIntent.putExtra("needCommit", true)
                                 }
+
+                                // If this entry has been created by Oreo Autofill, match it with
+                                // the autofilled form's origin.
+                                shouldMatchWith?.let {
+                                    AutofillMatcher.addMatchFor(applicationContext, it, File(path))
+                                }
+
                                 setResult(RESULT_OK, returnIntent)
                                 finish()
                             } catch (e: Exception) {

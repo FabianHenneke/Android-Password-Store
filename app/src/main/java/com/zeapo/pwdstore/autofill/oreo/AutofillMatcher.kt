@@ -31,17 +31,17 @@ class AutofillMatcher {
         private fun tokenKey(formOrigin: FormOrigin.App) = "token;${formOrigin.identifier}"
         private fun matchesKey(formOrigin: FormOrigin) = "matches;${formOrigin.identifier}"
 
-        private fun hasSignatureTokenChanged(context: Context, formOrigin: FormOrigin): Boolean {
+        private fun hasFormOriginHashChanged(context: Context, formOrigin: FormOrigin): Boolean {
             return when (formOrigin) {
                 is FormOrigin.Web -> false
                 is FormOrigin.App -> {
                     val packageName = formOrigin.identifier
-                    val signatureToken = context.makePackageSignatureToken(packageName)
-                    val storedSignatureToken = context.autofillAppMatches.getString(tokenKey(formOrigin), null)
+                    val certificatesHash = computeCertificatesHash(context, packageName)
+                    val storedCertificatesHash = context.autofillAppMatches.getString(tokenKey(formOrigin), null)
                             ?: return false
-                    val tokenHasChanged = signatureToken != storedSignatureToken
-                    if (tokenHasChanged) {
-                        Timber.tag(TAG).e("$packageName: stored=$storedSignatureToken, new=$signatureToken")
+                    val hashHasChanged = certificatesHash != storedCertificatesHash
+                    if (hashHasChanged) {
+                        Timber.tag(TAG).e("$packageName: stored=$storedCertificatesHash, new=$certificatesHash")
                         true
                     } else {
                         false
@@ -50,18 +50,20 @@ class AutofillMatcher {
             }
         }
 
-        private fun storeSignatureToken(context: Context, formOrigin: FormOrigin) {
+        private fun storeFormOriginHash(context: Context, formOrigin: FormOrigin) {
             if (formOrigin is FormOrigin.App) {
                 val packageName = formOrigin.identifier
-                val signatureToken = context.makePackageSignatureToken(packageName)
+                val certificatesHash = computeCertificatesHash(context, packageName)
                 context.autofillAppMatches.edit {
-                    putString(tokenKey(formOrigin), signatureToken)
+                    putString(tokenKey(formOrigin), certificatesHash)
                 }
             }
+            // We don't need to store a hash for FormOrigin.Web since it can only originate from
+            // browsers we trust to verify the origin.
         }
 
         fun getMatchesFor(context: Context, formOrigin: FormOrigin): List<File> {
-            if (hasSignatureTokenChanged(context, formOrigin)) {
+            if (hasFormOriginHashChanged(context, formOrigin)) {
                 Toast.makeText(context, "The app's publisher has changed; this may be a phishing attempt.", Toast.LENGTH_LONG).show()
                 return emptyList()
             }
@@ -85,7 +87,7 @@ class AutofillMatcher {
         fun addMatchFor(context: Context, formOrigin: FormOrigin, file: File) {
             if (!file.exists())
                 return
-            if (hasSignatureTokenChanged(context, formOrigin)) {
+            if (hasFormOriginHashChanged(context, formOrigin)) {
                 Toast.makeText(context, "The app's publisher has changed; this may be a phishing attempt.", Toast.LENGTH_LONG).show()
                 return
             }
@@ -99,7 +101,7 @@ class AutofillMatcher {
             matchPreferences.edit {
                 putStringSet(matchesKey(formOrigin), newFiles.map { it.absolutePath }.toSet())
             }
-            storeSignatureToken(context, formOrigin)
+            storeFormOriginHash(context, formOrigin)
         }
     }
 }
