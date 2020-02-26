@@ -1,10 +1,14 @@
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.content.Context
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Build
+import android.service.autofill.SaveCallback
 import android.util.Base64
 import android.widget.RemoteViews
+import android.widget.Toast
+import androidx.annotation.RequiresApi
 import com.google.common.net.InternetDomainName
 import com.zeapo.pwdstore.PasswordEntry
 import com.zeapo.pwdstore.R
@@ -68,8 +72,8 @@ data class Credentials(val username: String?, val password: String) {
 
 private fun makeRemoteView(context: Context, title: String, summary: String): RemoteViews {
     return RemoteViews(context.packageName, R.layout.oreo_autofill_dataset).apply {
-        setTextViewText(R.id.text1, title)
-        setTextViewText(R.id.text2, summary)
+        setTextViewText(R.id.title, title)
+        setTextViewText(R.id.summary, summary)
     }
 }
 
@@ -88,4 +92,29 @@ fun makeRemoteView(context: Context, file: File?, formOrigin: FormOrigin): Remot
 
 fun makePlaceholderRemoteView(context: Context): RemoteViews {
     return makeRemoteView(context, "PLACEHOLDER", "PLACEHOLDER")
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+class FixedSaveCallback(context: Context, private val callback: SaveCallback) {
+
+    private val applicationContext = context.applicationContext
+
+    fun onFailure(message: CharSequence) {
+        callback.onFailure(message)
+        // When targeting SDK 29, the message is no longer shown as a toast.
+        // See https://developer.android.com/reference/android/service/autofill/SaveCallback#onFailure(java.lang.CharSequence)
+        if (applicationContext.applicationInfo.targetSdkVersion >= 29)
+            Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
+    }
+
+    fun onSuccess(intentSender: IntentSender) {
+        if (Build.VERSION.SDK_INT >= 28) {
+            callback.onSuccess(intentSender)
+        } else {
+            callback.onSuccess()
+            // On SDKs < 28, we cannot advise the Autofill framework to launch the save intent in
+            // the context of the app that triggered the save request. Hence, we launch it here.
+            applicationContext.startIntentSender(intentSender, null, 0, 0, 0)
+        }
+    }
 }

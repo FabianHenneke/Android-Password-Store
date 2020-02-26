@@ -8,12 +8,14 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.service.autofill.Dataset
+import android.service.autofill.FillCallback
 import android.service.autofill.FillResponse
 import android.service.autofill.SaveInfo
 import android.util.Log
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import androidx.annotation.RequiresApi
+import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.autofill.oreo.CertaintyLevel.*
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillDecryptActivity
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillFilterView
@@ -275,9 +277,9 @@ class Form(context: Context, structure: AssistStructure) {
         }
     }
 
-    fun fillCredentials(context: Context, matchedFiles: List<File>): FillResponse {
+    fun fillCredentials(context: Context, matchedFiles: List<File>, callback: FillCallback) {
         check(canBeFilled)
-        return FillResponse.Builder().run {
+        val fillResponse = FillResponse.Builder().run {
             for (file in matchedFiles)
                 addDataset(makeAuthenticationDataset(context, file))
             addDataset(makeAuthenticationDataset(context, null))
@@ -288,27 +290,31 @@ class Form(context: Context, structure: AssistStructure) {
                 setSaveInfo(saveInfo)
             build()
         }
+        callback.onSuccess(fillResponse)
     }
 
-    fun saveCredentials(context: Context): Pair<Boolean, IntentSender?> {
+    fun saveCredentials(context: Context, callback: FixedSaveCallback) {
         check(canBeSaved)
         val usernameValue = usernameField?.autofillValue
         val username = if (usernameValue?.isText == true) usernameValue.textValue else null
-        val passwordValue = passwordFields.first().autofillValue ?: return Pair(false, null)
-        val password = if (passwordValue.isText) passwordValue.textValue else return Pair(false, null)
-        // Do not store masked passwords
-        if (password.all { it == '*' || it == '•' })
-            return Pair(false, null)
-        val credentials = Credentials(username?.toString(), password.toString())
-        val saveIntentSender = AutofillSaveActivity.makeSaveIntentSender(context, credentials, formOrigin!!)
-        return if (Build.VERSION.SDK_INT >= 28) {
-            Pair(true, saveIntentSender)
-        } else {
-            // On SDKs < 28, we cannot advise the Autofill framework to launch the save intent in
-            // the context of the app that triggered the save request. Hence, we launch it here.
-            context.startIntentSender(saveIntentSender, null, 0, 0, 0)
-            Pair(true, null)
+        val passwordValue = passwordFields.first().autofillValue
+        if (passwordValue == null) {
+            callback.onFailure(context.getString(R.string.oreo_autofill_save_invalid_password))
+            return
         }
+        val password = if (passwordValue.isText) {
+            passwordValue.textValue
+        } else {
+            callback.onFailure(context.getString(R.string.oreo_autofill_save_invalid_password))
+            return
+        }
+        // Do not store masked passwords
+        if (password.all { it == '*' || it == '•' }) {
+            callback.onFailure(context.getString(R.string.oreo_autofill_save_invalid_password))
+            return
+        }
+        val credentials = Credentials(username?.toString(), password.toString())
+        callback.onSuccess( AutofillSaveActivity.makeSaveIntentSender(context, credentials, formOrigin!!))
     }
 
     companion object {

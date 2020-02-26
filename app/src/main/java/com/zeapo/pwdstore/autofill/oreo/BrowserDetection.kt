@@ -34,13 +34,13 @@ import android.content.Context
     whether a save request to Password Store is triggered when you submit a registration form.
  */
 private val TRUSTED_BROWSER_CERTIFICATE_HASH = mapOf(
+        "com.android.chrome" to "8P1sW0EPJcslw7UzRsiXL64w+O50Ed+RBICtay1g24M=",
         "org.mozilla.firefox" to "p4tipRZbRJSy/q2edqKA0i2Tf+5iUa7OWZRGsuoxmwQ=",
         "org.mozilla.firefox_beta" to "p4tipRZbRJSy/q2edqKA0i2Tf+5iUa7OWZRGsuoxmwQ=",
         "org.mozilla.klar" to "YgOkc7421k7jf4f6UA7bx56rkwYQq5ufpMp9XB8bT/w=",
         "org.mozilla.focus" to "YgOkc7421k7jf4f6UA7bx56rkwYQq5ufpMp9XB8bT/w=",
         "org.mozilla.fenix.nightly" to "d+rEzu02r++6dheZMd1MwZWrDNVLrzVdIV57vdKOQCo=",
         "org.mozilla.fennec_aurora" to "vASIg40G9Mpr8yOG2qsN2OvPPncweHRZ9i+zzRShuqo="
-
 )
 
 fun isTrustedBrowser(context: Context, packageName: String): Boolean {
@@ -50,6 +50,7 @@ fun isTrustedBrowser(context: Context, packageName: String): Boolean {
 }
 
 private val BROWSERS_WITH_SAVE_SUPPORT = listOf(
+        // TODO: revisit "com.android.chrome", currently only provides masked passwords
         "org.mozilla.klar",
         "org.mozilla.focus",
         "org.mozilla.fenix.nightly",
