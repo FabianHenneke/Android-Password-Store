@@ -68,14 +68,18 @@ class AutofillFilterView : AppCompatActivity() {
             finish()
             return
         }
-        formOrigin = if (intent?.hasExtra(EXTRA_FORM_ORIGIN_WEB) == true) {
-            FormOrigin.Web(intent!!.getStringExtra(EXTRA_FORM_ORIGIN_WEB)!!)
-        } else if (intent?.hasExtra(EXTRA_FORM_ORIGIN_APP) == true) {
-            FormOrigin.App(intent!!.getStringExtra(EXTRA_FORM_ORIGIN_APP)!!)
-        } else {
-            Timber.tag(TAG).e("AutofillFilterActivity started without EXTRA_FORM_ORIGIN_WEB or EXTRA_FORM_ORIGIN_APP")
-            finish()
-            return
+        formOrigin = when {
+            intent?.hasExtra(EXTRA_FORM_ORIGIN_WEB) == true -> {
+                FormOrigin.Web(intent!!.getStringExtra(EXTRA_FORM_ORIGIN_WEB)!!)
+            }
+            intent?.hasExtra(EXTRA_FORM_ORIGIN_APP) == true -> {
+                FormOrigin.App(intent!!.getStringExtra(EXTRA_FORM_ORIGIN_APP)!!)
+            }
+            else -> {
+                Timber.tag(TAG).e("AutofillFilterActivity started without EXTRA_FORM_ORIGIN_WEB or EXTRA_FORM_ORIGIN_APP")
+                finish()
+                return
+            }
         }
 
         supportActionBar?.hide()
