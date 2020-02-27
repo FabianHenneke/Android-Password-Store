@@ -35,10 +35,13 @@ import android.content.Context
  */
 private val TRUSTED_BROWSER_CERTIFICATE_HASH = mapOf(
         "com.android.chrome" to "8P1sW0EPJcslw7UzRsiXL64w+O50Ed+RBICtay1g24M=",
+        "com.brave.browser" to "nC23BRNRX9v7vFhbPt89cSPU3GfJT/0wY2HB15u/GKw=",
+        // "com.duckduckgo.mobile.android" to "u3uzHFc8RqHaf8XFKKas9DIQhFb+7FCBDH8zaU6z0tQ=",
         "org.mozilla.firefox" to "p4tipRZbRJSy/q2edqKA0i2Tf+5iUa7OWZRGsuoxmwQ=",
         "org.mozilla.firefox_beta" to "p4tipRZbRJSy/q2edqKA0i2Tf+5iUa7OWZRGsuoxmwQ=",
         "org.mozilla.klar" to "YgOkc7421k7jf4f6UA7bx56rkwYQq5ufpMp9XB8bT/w=",
         "org.mozilla.focus" to "YgOkc7421k7jf4f6UA7bx56rkwYQq5ufpMp9XB8bT/w=",
+        "org.mozilla.fenix" to "UAR3kIjn+YjVvFzF+HmP6/T4zQhKGypG79TI7krq8hE=",
         "org.mozilla.fenix.nightly" to "d+rEzu02r++6dheZMd1MwZWrDNVLrzVdIV57vdKOQCo=",
         "org.mozilla.fennec_aurora" to "vASIg40G9Mpr8yOG2qsN2OvPPncweHRZ9i+zzRShuqo="
 )
@@ -50,9 +53,13 @@ fun isTrustedBrowser(context: Context, packageName: String): Boolean {
 }
 
 private val BROWSERS_WITH_SAVE_SUPPORT = listOf(
-        // TODO: revisit "com.android.chrome", currently only provides masked passwords
+        // Add known incompatible browsers here so that they can be revisited from time to time
+        // "com.android.chrome": currently only provides masked passwords
+        // "com.brave.browser": currently only provides masked passwords
+
         "org.mozilla.klar",
         "org.mozilla.focus",
+        "org.mozilla.fenix",
         "org.mozilla.fenix.nightly",
         "org.mozilla.fennec_aurora"
 )

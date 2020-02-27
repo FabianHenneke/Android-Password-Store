@@ -16,6 +16,7 @@ import android.content.SharedPreferences
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.text.InputType
 import android.text.TextUtils
 import android.text.format.DateUtils
 import android.text.method.PasswordTransformationMethod
@@ -177,7 +178,10 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
 
                 title = getString(R.string.new_password_title)
                 crypto_password_category.text = getRelativePath(fullPath, repoPath)
-                suggestedPass?.let { crypto_password_edit.setText(it) }
+                suggestedPass?.let {
+                    crypto_password_edit.setText(it)
+                    crypto_password_edit.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                }
                 suggestedExtra?.let { crypto_extra_edit.setText(it) }
             }
         }

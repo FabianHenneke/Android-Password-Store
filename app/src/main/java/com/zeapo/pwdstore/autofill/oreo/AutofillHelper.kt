@@ -9,10 +9,11 @@ import android.util.Base64
 import android.widget.RemoteViews
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import com.github.ajalt.timberkt.Timber.tag
+import com.github.ajalt.timberkt.e
 import com.google.common.net.InternetDomainName
 import com.zeapo.pwdstore.PasswordEntry
 import com.zeapo.pwdstore.R
-import timber.log.Timber
 import java.io.File
 import java.security.MessageDigest
 
@@ -42,13 +43,13 @@ fun computeCertificatesHash(context: Context, packageName: String): String {
                 ?: info.signingInfo.apkContentsSigners
         val stableHashNew = stableHash(signaturesNew.map { it.toByteArray() })
         if (stableHashNew != stableHashOld)
-            Timber.tag("SignatureToken").e("Mismatch between old and new hash: $stableHashNew != $stableHashOld")
+            tag("CertificatesHash").e { "Mismatch between old and new hash: $stableHashNew != $stableHashOld" }
     }
     return stableHashOld
 }
 
-fun getCanonicalDomain(domain: String): String? {
-    var idn = InternetDomainName.from(domain)
+fun getCanonicalDomain(host: String): String? {
+    var idn = InternetDomainName.from(host)
     while (idn != null && !idn.isTopPrivateDomain)
         idn = idn.parent()
     return idn.toString()

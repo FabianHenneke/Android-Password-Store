@@ -2,7 +2,6 @@ package com.zeapo.pwdstore.autofill.oreo
 
 import android.app.assist.AssistStructure
 import android.content.Context
-import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -11,10 +10,10 @@ import android.service.autofill.Dataset
 import android.service.autofill.FillCallback
 import android.service.autofill.FillResponse
 import android.service.autofill.SaveInfo
-import android.util.Log
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import androidx.annotation.RequiresApi
+import com.github.ajalt.timberkt.d
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.autofill.oreo.CertaintyLevel.*
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillDecryptActivity
@@ -86,42 +85,61 @@ sealed class FormOrigin(open val identifier: String) {
 
 @RequiresApi(Build.VERSION_CODES.O)
 class Form(context: Context, structure: AssistStructure) {
-    private val TAG = "Form"
+
+    companion object {
+
+        const val BUNDLE_KEY_USERNAME_ID = "usernameId"
+        const val BUNDLE_KEY_PASSWORD_IDS = "passwordIds"
+
+        fun makeFillInDataset(context: Context, credentials: Credentials, clientState: Bundle): Dataset {
+            val remoteView = makePlaceholderRemoteView(context)
+            return Dataset.Builder(remoteView).run {
+                val usernameId = clientState.getParcelable<AutofillId>(BUNDLE_KEY_USERNAME_ID)
+                if (usernameId != null && credentials.username != null)
+                    setValue(usernameId, AutofillValue.forText(credentials.username))
+                val passwordIds = clientState.getParcelableArrayList<AutofillId>(BUNDLE_KEY_PASSWORD_IDS)
+                if (passwordIds != null) {
+                    for (passwordId in passwordIds) {
+                        setValue(passwordId, AutofillValue.forText(credentials.password))
+                    }
+                }
+                build()
+            }
+        }
+    }
 
     private val fillableFields = mutableListOf<FormField>()
     private val ignoredIds = mutableListOf<AutofillId>()
-    private val passwordFields by lazy { identifyPasswordFields() }
-    private val usernameField by lazy { identifyUsernameField() }
 
     private var packageName = structure.activityComponent.packageName
     // FIXME: Verify signature
     private val isBrowser = packageName in ALL_BROWSERS
-    private var originToFill: String? = null
-
-    val formOrigin by lazy {
-        if (isBrowser && originToFill != null) {
-            val host = Uri.parse(originToFill!!).host
-            if (host != null) {
-                val canonicalDomain = getCanonicalDomain(host)
-                if (canonicalDomain != null)
-                    FormOrigin.Web(canonicalDomain)
-                else
-                    null
-            } else
-                null
-        } else {
-            FormOrigin.App(packageName)
-        }
-    }
-    val canBeFilled by lazy { (usernameField != null || passwordFields.isNotEmpty()) && formOrigin != null }
-    // FIXME
-    val canBeSaved by lazy { passwordFields.isNotEmpty() && formOrigin != null }
+    private val webOrigins = mutableListOf<String>()
 
     init {
-        Log.d(TAG, "Request from $packageName (${computeCertificatesHash(context, packageName)})")
+        d { "Request from $packageName (${computeCertificatesHash(context, packageName)})" }
         parseStructure(structure)
-        Log.d(TAG, "Username field: $usernameField")
-        Log.d(TAG, "Password field(s): $passwordFields")
+    }
+
+    private val passwordFields = identifyPasswordFields()
+    private val usernameField = identifyUsernameField()
+
+    init {
+        d { "Username field: $usernameField" }
+        d { "Password field(s): $passwordFields" }
+    }
+
+    val formOrigin = determineFormOrigin()
+
+    val canBeFilled = (usernameField != null || passwordFields.isNotEmpty()) && formOrigin != null
+    // FIXME
+    val canBeSaved = passwordFields.isNotEmpty() && formOrigin != null
+
+    private val clientState by lazy {
+        Bundle(2).apply {
+            putParcelable(BUNDLE_KEY_USERNAME_ID, usernameField?.autofillId)
+            putParcelableArrayList(BUNDLE_KEY_PASSWORD_IDS, passwordFields.map { it.autofillId }.toCollection(ArrayList()))
+        }
     }
 
     private fun parseStructure(structure: AssistStructure) {
@@ -132,12 +150,13 @@ class Form(context: Context, structure: AssistStructure) {
 
     private fun parseViewNode(node: AssistStructure.ViewNode) {
         val field = FormField(node)
+        registerOrigin(field)
         // FIXME: Improve origin detection by considering iframes and restricting to the list returned by adb shell settings get global autofill_compat_mode_allowed_packages
-        if (shouldContinueBasedOnOrigin(node) && field.isFillable) {
-            Log.d("Form", "$field")
+        if (field.isFillable) {
+            d { "$field" }
             fillableFields.add(field)
         } else {
-            // Log.d("Form", "Found non-fillable field: $field")
+            // d { "Found non-fillable field: $field" }
             ignoredIds.add(field.autofillId)
         }
 
@@ -146,23 +165,15 @@ class Form(context: Context, structure: AssistStructure) {
         }
     }
 
-    private fun shouldContinueBasedOnOrigin(node: AssistStructure.ViewNode): Boolean {
+    private fun registerOrigin(field: FormField) {
         if (!isBrowser)
-            return true
-        val domain = node.webDomain ?: return originToFill == null
-        val scheme = (if (Build.VERSION.SDK_INT >= 28) node.webScheme else null) ?: "https"
-        if (scheme !in listOf("http", "https"))
-            return false
-        val origin = "$scheme://$domain"
-        if (originToFill == null) {
-            Log.d(TAG, "Origin encountered: $origin")
-            originToFill = origin
+            return
+        field.webOrigin?.let {
+            if (it !in webOrigins) {
+                d { "Origin encountered: $it" }
+                webOrigins.add(it)
+            }
         }
-        if (origin != originToFill) {
-            Log.d("Form", "Not same-origin field: ${node.className} with origin $origin")
-            return false
-        }
-        return true
     }
 
     private fun isSingleFieldOrAdjacentPair(fields: List<FormField>): Boolean {
@@ -208,7 +219,7 @@ class Form(context: Context, structure: AssistStructure) {
         return emptyList()
     }
 
-    private fun takeFirstBeforePasswordFields(fields: List<FormField>, alwaysTakeSingleField: Boolean = false): FormField? {
+    private fun takeFieldRightBeforePasswordFields(fields: List<FormField>, alwaysTakeSingleField: Boolean = false): FormField? {
         if (fields.isEmpty())
             return null
         if (fields.size == 1 && alwaysTakeSingleField)
@@ -216,7 +227,11 @@ class Form(context: Context, structure: AssistStructure) {
         if (passwordFields.isEmpty())
             return null
         val firstPasswordIndex = fillableFields.indexOf(passwordFields.first())
-        return fields.last { fillableFields.indexOf(it) < firstPasswordIndex }
+        val potentialUsernameIndex = firstPasswordIndex - 1
+        if (potentialUsernameIndex < 0)
+            return null
+        val potentialUsernameField = fillableFields[potentialUsernameIndex]
+        return potentialUsernameField.takeIf { it in fields }
     }
 
     private fun identifyUsernameField(): FormField? {
@@ -224,35 +239,53 @@ class Form(context: Context, structure: AssistStructure) {
         if (possibleUsernameFields.isEmpty())
             return null
         val certainUsernameFields = fillableFields.filter { it.usernameCertainty >= Certain }
-        var result = takeFirstBeforePasswordFields(certainUsernameFields, alwaysTakeSingleField = true)
+        var result = takeFieldRightBeforePasswordFields(certainUsernameFields, alwaysTakeSingleField = true)
         if (result != null)
             return result
         val likelyUsernameFields = fillableFields.filter { it.usernameCertainty >= Likely }
-        result = takeFirstBeforePasswordFields(likelyUsernameFields)
+        result = takeFieldRightBeforePasswordFields(likelyUsernameFields)
         if (result != null)
             return result
-        return takeFirstBeforePasswordFields(possibleUsernameFields)
+        return takeFieldRightBeforePasswordFields(possibleUsernameFields)
     }
 
-    private val clientState by lazy {
-        Bundle(2).apply {
-            putParcelable(BUNDLE_KEY_USERNAME_ID, usernameField?.autofillId)
-            putParcelableArrayList(BUNDLE_KEY_PASSWORD_IDS, passwordFields.map { it.autofillId }.toCollection(ArrayList()))
+    private fun determineFormOrigin(): FormOrigin? {
+        return if (!isBrowser || webOrigins.isEmpty()) {
+            FormOrigin.App(packageName)
+        } else if (webOrigins.size == 1) {
+            // Security assumption on trusted browsers:
+            // Every origin that contributes fillable fields to a web page appears at least once as
+            // the webDomain of some ViewNode (but not necessarily one that represents a fillable
+            // field).
+            // It is thus safe to fill into any fillable field if there is only a single origin.
+            val host = Uri.parse(webOrigins.first()).host ?: return null
+            val canonicalDomain = getCanonicalDomain(host) ?: return null
+            FormOrigin.Web(canonicalDomain)
+        } else {
+            // Based on our assumption above, if there are nodes from multiple origins on a page,
+            // we can only safely fill if the fields to fill are all explicitly labeled with the
+            // same origin.
+            val fieldsToFill = passwordFields.toMutableList()
+            usernameField?.let { fieldsToFill.add(it) }
+            val originsAmongFieldsToFill = fieldsToFill.map { it.webOrigin }
+            if (originsAmongFieldsToFill.size != 1)
+                return null
+            val originToFill = originsAmongFieldsToFill.first() ?: return null
+            FormOrigin.Web(originToFill)
         }
     }
 
     private fun makeAuthenticationDataset(context: Context, file: File?): Dataset {
         val remoteView = makeRemoteView(context, file, formOrigin!!)
         return Dataset.Builder(remoteView).run {
-            if (usernameField != null)
-                usernameField!!.fillWith(this, "PLACEHOLDER")
+            usernameField?.fillWith(this, "PLACEHOLDER")
             for (passwordField in passwordFields) {
                 passwordField.fillWith(this, "PLACEHOLDER")
             }
             val intent = if (file != null)
                 AutofillDecryptActivity.makeDecryptFileIntentSender(file, context)
             else
-                AutofillFilterView.makeMatchAndDecryptFileIntentSender(context, formOrigin!!)
+                AutofillFilterView.makeMatchAndDecryptFileIntentSender(context, formOrigin)
             setAuthentication(intent)
             build()
         }
@@ -315,28 +348,7 @@ class Form(context: Context, structure: AssistStructure) {
             return
         }
         val credentials = Credentials(username?.toString(), password.toString())
-        callback.onSuccess( AutofillSaveActivity.makeSaveIntentSender(context, credentials, formOrigin!!))
+        callback.onSuccess(AutofillSaveActivity.makeSaveIntentSender(context, credentials, formOrigin!!))
     }
 
-    companion object {
-
-        const val BUNDLE_KEY_USERNAME_ID = "usernameId"
-        const val BUNDLE_KEY_PASSWORD_IDS = "passwordIds"
-
-        fun makeFillInDataset(context: Context, credentials: Credentials, clientState: Bundle): Dataset {
-            val remoteView = makePlaceholderRemoteView(context)
-            return Dataset.Builder(remoteView).run {
-                val usernameId = clientState.getParcelable<AutofillId>(BUNDLE_KEY_USERNAME_ID)
-                if (usernameId != null && credentials.username != null)
-                    setValue(usernameId, AutofillValue.forText(credentials.username))
-                val passwordIds = clientState.getParcelableArrayList<AutofillId>(BUNDLE_KEY_PASSWORD_IDS)
-                if (passwordIds != null) {
-                    for (passwordId in passwordIds) {
-                        setValue(passwordId, AutofillValue.forText(credentials.password))
-                    }
-                }
-                build()
-            }
-        }
-    }
 }

@@ -54,6 +54,7 @@ ext.deps = [
         recyclical: 'com.afollestad:recyclical:1.1.1',
         ssh_auth: 'org.sufficientlysecure:sshauthentication-api:1.0',
         timber: 'com.jakewharton.timber:timber:4.7.1',
+        timberkt: 'com.github.ajalt:timberkt:1.5.1',
         whatthestack: 'com.github.haroldadmin:WhatTheStack:0.0.1',
     ],
 

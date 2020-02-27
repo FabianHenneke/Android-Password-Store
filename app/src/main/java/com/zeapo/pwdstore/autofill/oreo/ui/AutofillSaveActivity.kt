@@ -16,7 +16,6 @@ import com.zeapo.pwdstore.utils.PasswordRepository
 class AutofillSaveActivity : Activity() {
 
     companion object {
-        private const val TAG = "AutofillStoreActivity"
         private const val EXTRA_FOLDER_NAME = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FOLDER_NAME"
         private const val EXTRA_PASSWORD = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_PASSWORD"
         private const val EXTRA_USERNAME = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_USERNAME"

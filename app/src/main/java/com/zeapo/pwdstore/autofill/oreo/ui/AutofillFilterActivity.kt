@@ -22,6 +22,7 @@ import androidx.preference.PreferenceManager
 import com.afollestad.recyclical.datasource.dataSourceOf
 import com.afollestad.recyclical.setup
 import com.afollestad.recyclical.withItem
+import com.github.ajalt.timberkt.e
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.autofill.oreo.AutofillMatcher
 import com.zeapo.pwdstore.autofill.oreo.FormOrigin
@@ -36,7 +37,6 @@ import java.util.*
 class AutofillFilterView : AppCompatActivity() {
 
     companion object {
-        private const val TAG = "AutofillFilterView"
         private const val EXTRA_FORM_ORIGIN_WEB = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FORM_ORIGIN_WEB"
         private const val EXTRA_FORM_ORIGIN_APP = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FORM_ORIGIN_APP"
         private var matchAndDecryptFileRequestCode = 1
@@ -64,7 +64,7 @@ class AutofillFilterView : AppCompatActivity() {
         setContentView(R.layout.activity_oreo_autofill_filter)
 
         if (intent?.hasExtra(AutofillManager.EXTRA_CLIENT_STATE) != true) {
-            Timber.tag(TAG).e("AutofillFilterActivity started without EXTRA_CLIENT_STATE")
+            e { "AutofillFilterActivity started without EXTRA_CLIENT_STATE" }
             finish()
             return
         }
@@ -76,7 +76,7 @@ class AutofillFilterView : AppCompatActivity() {
                 FormOrigin.App(intent!!.getStringExtra(EXTRA_FORM_ORIGIN_APP)!!)
             }
             else -> {
-                Timber.tag(TAG).e("AutofillFilterActivity started without EXTRA_FORM_ORIGIN_WEB or EXTRA_FORM_ORIGIN_APP")
+                e { "AutofillFilterActivity started without EXTRA_FORM_ORIGIN_WEB or EXTRA_FORM_ORIGIN_APP" }
                 finish()
                 return
             }

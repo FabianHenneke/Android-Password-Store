@@ -7,10 +7,10 @@ import android.content.Intent
 import android.content.IntentSender
 import android.os.Build
 import android.os.Bundle
-import android.view.WindowManager
 import android.view.autofill.AutofillManager
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import com.github.ajalt.timberkt.e
 import com.zeapo.pwdstore.PasswordEntry
 import com.zeapo.pwdstore.autofill.oreo.Credentials
 import com.zeapo.pwdstore.autofill.oreo.Form
@@ -30,7 +30,6 @@ import kotlin.coroutines.suspendCoroutine
 class AutofillDecryptActivity : Activity(), CoroutineScope {
 
     companion object {
-        private const val TAG = "DecryptActivity"
         private const val EXTRA_FILE_PATH = "com.zeapo.pwdstore.autofill.oreo.EXTRA_FILE_PATH"
         private const val REQUEST_CODE_CONTINUE_AFTER_USER_INTERACTION = 1
         private const val OPENPGP_PROVIDER = "org.sufficientlysecure.keychain"
@@ -60,12 +59,12 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
     override fun onStart() {
         super.onStart()
         val filePath = intent?.getStringExtra(EXTRA_FILE_PATH) ?: run {
-            Timber.tag(TAG).e("AutofillDecryptActivity started without EXTRA_FILE_PATH")
+            e { "AutofillDecryptActivity started without EXTRA_FILE_PATH" }
             finish()
             return
         }
         val clientState = intent?.getBundleExtra(AutofillManager.EXTRA_CLIENT_STATE) ?: run {
-            Timber.tag(TAG).e("AutofillDecryptActivity started without EXTRA_CLIENT_STATE")
+            e { "AutofillDecryptActivity started without EXTRA_CLIENT_STATE" }
             finish()
             return
         }
@@ -118,14 +117,14 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
         val encryptedInput = try {
             file.inputStream()
         } catch (e: FileNotFoundException) {
-            Timber.tag(TAG).e(e)
+            e(e) { "File to decrypt not found" }
             return null
         }
         val decryptedOutput = ByteArrayOutputStream()
         val result = try {
             executeOpenPgpApi(command, encryptedInput, decryptedOutput)
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e)
+            e(e) { "OpenPgpApi ACTION_DECRYPT_VERIFY failed" }
             return null
         }
         return when (val resultCode = result?.getIntExtra(OpenPgpApi.RESULT_CODE, OpenPgpApi.RESULT_CODE_ERROR)) {
@@ -136,12 +135,11 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
                     }
                     Credentials.fromStoreEntry(file, entry)
                 } catch (e: UnsupportedEncodingException) {
-                    Timber.tag(TAG).e(e)
+                    e(e) { "Failed to parse password entry" }
                     null
                 }
             }
             OpenPgpApi.RESULT_CODE_USER_INTERACTION_REQUIRED -> {
-                Timber.tag("PgpHandler").i("RESULT_CODE_USER_INTERACTION_REQUIRED")
                 val pendingIntent: PendingIntent = result.getParcelableExtra(OpenPgpApi.RESULT_INTENT)
                 try {
                     val intentToResume = withContext(Dispatchers.Main) {
@@ -158,7 +156,7 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
                     }
                     decryptUsernameAndPassword(file, intentToResume)
                 } catch (e: Exception) {
-                    Timber.tag(TAG).e(e)
+                    e(e) { "OpenPgpApi ACTION_DECRYPT_VERIFY failed with user interaction"}
                     null
                 }
             }
@@ -166,13 +164,12 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
                 val error = result.getParcelableExtra<OpenPgpError>(OpenPgpApi.RESULT_ERROR)
                 if (error != null) {
                     Toast.makeText(applicationContext, "Error from OpenKeyChain: ${error.message}", Toast.LENGTH_LONG).show()
-                    Timber.tag(TAG).e("onError getErrorId: ${error.errorId}")
-                    Timber.tag(TAG).e("onError getMessage: ${error.message}")
+                    e { "OpenPgpApi ACTION_DECRYPT_VERIFY failed (${error.errorId}): ${error.message}" }
                 }
                 null
             }
             else -> {
-                Timber.tag(TAG).e("Unrecognized OpenPgpApi result: $resultCode")
+                e { "Unrecognized OpenPgpApi result: $resultCode" }
                 null
             }
         }
@@ -184,7 +181,7 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
             if (resultCode == RESULT_OK && data != null) {
                 continueAfterUserInteraction?.resume(data)
             } else {
-                continueAfterUserInteraction?.resumeWithException(Exception("OpenPgpApi failed to continue after user interaction"))
+                continueAfterUserInteraction?.resumeWithException(Exception("OpenPgpApi ACTION_DECRYPT_VERIFY failed to continue after user interaction"))
             }
             continueAfterUserInteraction = null
         }

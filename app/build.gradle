@@ -105,6 +105,7 @@ dependencies {
     implementation deps.third_party.recyclical
     implementation deps.third_party.ssh_auth
     implementation deps.third_party.timber
+    implementation deps.third_party.timberkt
     implementation deps.third_party.whatthestack
 
     if (isSnapshot()) {

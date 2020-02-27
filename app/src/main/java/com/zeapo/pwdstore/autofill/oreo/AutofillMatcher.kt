@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.core.content.edit
-import timber.log.Timber
+import com.github.ajalt.timberkt.Timber.e
 import java.io.File
 
 
@@ -25,7 +25,6 @@ private fun Context.matchPreferences(formOrigin: FormOrigin): SharedPreferences 
 
 class AutofillMatcher {
     companion object {
-        private const val TAG = "AutofillMatcher"
         private const val MAX_NUM_MATCHES = 5
 
         private fun tokenKey(formOrigin: FormOrigin.App) = "token;${formOrigin.identifier}"
@@ -41,7 +40,7 @@ class AutofillMatcher {
                             ?: return false
                     val hashHasChanged = certificatesHash != storedCertificatesHash
                     if (hashHasChanged) {
-                        Timber.tag(TAG).e("$packageName: stored=$storedCertificatesHash, new=$certificatesHash")
+                        e { "$packageName: stored=$storedCertificatesHash, new=$certificatesHash" }
                         true
                     } else {
                         false
