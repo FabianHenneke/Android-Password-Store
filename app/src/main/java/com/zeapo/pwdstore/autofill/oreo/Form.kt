@@ -106,6 +106,8 @@ class Form(context: Context, structure: AssistStructure) {
                 build()
             }
         }
+
+        private val SUPPORTED_SCHEMES = listOf("http", "https")
     }
 
     private val fillableFields = mutableListOf<FormField>()
@@ -249,6 +251,16 @@ class Form(context: Context, structure: AssistStructure) {
         return takeFieldRightBeforePasswordFields(possibleUsernameFields)
     }
 
+    private fun webOriginToFormOrigin(origin: String): FormOrigin? {
+        val uri = Uri.parse(origin) ?: return null
+        val scheme = uri.scheme ?: return null
+        if (scheme !in SUPPORTED_SCHEMES)
+            return null
+        val host = uri.host ?: return null
+        val canonicalDomain = getCanonicalDomain(host) ?: return null
+        return FormOrigin.Web(canonicalDomain)
+    }
+
     private fun determineFormOrigin(): FormOrigin? {
         return if (!isBrowser || webOrigins.isEmpty()) {
             FormOrigin.App(packageName)
@@ -258,9 +270,7 @@ class Form(context: Context, structure: AssistStructure) {
             // the webDomain of some ViewNode (but not necessarily one that represents a fillable
             // field).
             // It is thus safe to fill into any fillable field if there is only a single origin.
-            val host = Uri.parse(webOrigins.first()).host ?: return null
-            val canonicalDomain = getCanonicalDomain(host) ?: return null
-            FormOrigin.Web(canonicalDomain)
+            webOriginToFormOrigin(webOrigins.first())
         } else {
             // Based on our assumption above, if there are nodes from multiple origins on a page,
             // we can only safely fill if the fields to fill are all explicitly labeled with the
@@ -271,7 +281,7 @@ class Form(context: Context, structure: AssistStructure) {
             if (originsAmongFieldsToFill.size != 1)
                 return null
             val originToFill = originsAmongFieldsToFill.first() ?: return null
-            FormOrigin.Web(originToFill)
+            webOriginToFormOrigin(originToFill)
         }
     }
 
