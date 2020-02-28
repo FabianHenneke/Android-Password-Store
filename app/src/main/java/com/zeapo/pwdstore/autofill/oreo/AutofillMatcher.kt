@@ -5,7 +5,9 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.core.content.edit
 import com.github.ajalt.timberkt.Timber.e
+import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.i
+import com.github.ajalt.timberkt.w
 import java.io.File
 
 
@@ -28,8 +30,11 @@ class AutofillMatcher {
     companion object {
         private const val MAX_NUM_MATCHES = 10
 
-        private fun tokenKey(formOrigin: FormOrigin.App) = "token;${formOrigin.identifier}"
-        private fun matchesKey(formOrigin: FormOrigin) = "matches;${formOrigin.identifier}"
+        private const val PREFERENCE_PREFIX_TOKEN = "token;"
+        private fun tokenKey(formOrigin: FormOrigin.App) = "$PREFERENCE_PREFIX_TOKEN${formOrigin.identifier}"
+
+        private const val PREFERENCE_PREFIX_MATCHES = "matches;"
+        private fun matchesKey(formOrigin: FormOrigin) = "$PREFERENCE_PREFIX_MATCHES${formOrigin.identifier}"
 
         private fun hasFormOriginHashChanged(context: Context, formOrigin: FormOrigin): Boolean {
             return when (formOrigin) {
@@ -102,31 +107,39 @@ class AutofillMatcher {
                 putStringSet(matchesKey(formOrigin), newFiles.map { it.absolutePath }.toSet())
             }
             storeFormOriginHash(context, formOrigin)
+            d { "Stored match for $formOrigin" }
         }
 
+        // FIXME: Moving folders?
         fun updateMatchesFor(context: Context, file: File, newFile: File) {
             val oldPath = file.absolutePath
             val newPath = newFile.absolutePath
-            for ((origin, value) in context.autofillWebMatches.all) {
-                val matches = value as? MutableSet<String> ?: continue
-                if (oldPath in matches) {
-                    matches.remove(oldPath)
-                    matches.add(newPath)
-                    i { "Updating match for $origin: $oldPath --> $newPath" }
-                }
-                context.autofillWebMatches.edit {
-                    putStringSet(origin, matches)
-                }
-            }
-            for ((origin, value) in context.autofillAppMatches.all) {
-                val matches = value as? MutableSet<String> ?: continue
-                if (oldPath in matches) {
-                    matches.remove(oldPath)
-                    matches.add(newPath)
-                    i { "Updating match for $origin: $oldPath --> $newPath" }
-                }
-                context.autofillWebMatches.edit {
-                    putStringSet(origin, matches)
+            for (prefs in listOf(context.autofillAppMatches, context.autofillWebMatches)) {
+                for ((key, value) in prefs.all) {
+                    if (!key.startsWith(PREFERENCE_PREFIX_MATCHES))
+                        continue
+                    val matches = value as? MutableSet<String>
+                    if (matches == null) {
+                        w { "Failed to read matches for $key" }
+                        continue
+                    }
+                    var shouldCommit = false
+                    if (newPath in matches) {
+                        matches.remove(newPath)
+                        shouldCommit = true
+                        i { "Overwriting match for $key: $newPath" }
+                    }
+                    if (oldPath in matches) {
+                        matches.remove(oldPath)
+                        matches.add(newPath)
+                        shouldCommit = true
+                        i { "Updating match for $key: $oldPath --> $newPath" }
+                    }
+                    if (shouldCommit) {
+                        prefs.edit(commit = true) {
+                            putStringSet(key, matches)
+                        }
+                    }
                 }
             }
         }
