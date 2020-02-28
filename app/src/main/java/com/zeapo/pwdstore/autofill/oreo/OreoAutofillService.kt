@@ -30,11 +30,16 @@ class OreoAutofillService : AutofillService() {
         if (request.fillContexts.size != 1)
             d { "Unusual number of fillContexts: ${request.fillContexts.size}" }
         val structureToFill = request.fillContexts.lastOrNull()?.structure
-        if (structureToFill == null || structureToFill.activityComponent.packageName in DENYLISTED_PACKAGES) {
+        if (structureToFill == null) {
             callback.onSuccess(null)
             return
         }
-        val formToFill = Form(this, structureToFill)
+        val isManualRequest = request.flags and FillRequest.FLAG_MANUAL_REQUEST == FillRequest.FLAG_MANUAL_REQUEST
+        if (structureToFill.activityComponent.packageName in DENYLISTED_PACKAGES && !isManualRequest) {
+            callback.onSuccess(null)
+            return
+        }
+        val formToFill = Form(this, structureToFill, isManualRequest)
         if (!formToFill.canBeFilled) {
             d { "Form cannot be filled" }
             callback.onSuccess(null)
@@ -55,7 +60,7 @@ class OreoAutofillService : AutofillService() {
             callback.onFailure(getString(R.string.oreo_autofill_save_app_not_supported))
             return
         }
-        val formToFill = Form(this, structureToFill)
+        val formToFill = Form(this, structureToFill, isManualRequest = false)
         if (!formToFill.canBeSaved) {
             callback.onFailure(getString(R.string.oreo_autofill_save_no_password_field))
             return

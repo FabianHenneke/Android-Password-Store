@@ -84,7 +84,8 @@ sealed class FormOrigin(open val identifier: String) {
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-class Form(context: Context, structure: AssistStructure) {
+// FIXME: Use manual request?
+class Form(context: Context, structure: AssistStructure, private val isManualRequest: Boolean) {
 
     companion object {
 
@@ -114,8 +115,14 @@ class Form(context: Context, structure: AssistStructure) {
     private val ignoredIds = mutableListOf<AutofillId>()
 
     private var packageName = structure.activityComponent.packageName
-    // FIXME: Verify signature
+    // FIXME
+//    private val isBrowser = isTrustedBrowser(context, packageName)
     private val isBrowser = packageName in ALL_BROWSERS
+    // FIXME
+//    private val isBrowserSupportingSave = isBrowser && isBrowserWithSaveSupport(packageName)
+    private val isBrowserSupportingSave = isBrowser
+    private val isBrowserSupportingMultiOrigin = isBrowser && isBrowserWithMultiOriginSupport(packageName)
+
     private val webOrigins = mutableListOf<String>()
 
     init {
@@ -134,8 +141,7 @@ class Form(context: Context, structure: AssistStructure) {
     val formOrigin = determineFormOrigin()
 
     val canBeFilled = (usernameField != null || passwordFields.isNotEmpty()) && formOrigin != null
-    // FIXME
-    val canBeSaved = passwordFields.isNotEmpty() && formOrigin != null
+    val canBeSaved = passwordFields.isNotEmpty() && formOrigin != null && (!isBrowser || isBrowserSupportingSave)
 
     private val clientState by lazy {
         Bundle(2).apply {
@@ -151,14 +157,14 @@ class Form(context: Context, structure: AssistStructure) {
     }
 
     private fun parseViewNode(node: AssistStructure.ViewNode) {
+        trackOrigin(node)
         val field = FormField(node)
-        registerOrigin(field)
         // FIXME: Improve origin detection by considering iframes and restricting to the list returned by adb shell settings get global autofill_compat_mode_allowed_packages
-        if (field.isFillable) {
+        if (field.shouldBeFilled) {
             d { "$field" }
             fillableFields.add(field)
         } else {
-            // d { "Found non-fillable field: $field" }
+            d { "Found non-fillable field: $field" }
             ignoredIds.add(field.autofillId)
         }
 
@@ -167,10 +173,10 @@ class Form(context: Context, structure: AssistStructure) {
         }
     }
 
-    private fun registerOrigin(field: FormField) {
+    private fun trackOrigin(node: AssistStructure.ViewNode) {
         if (!isBrowser)
             return
-        field.webOrigin?.let {
+        node.webOrigin?.let {
             if (it !in webOrigins) {
                 d { "Origin encountered: $it" }
                 webOrigins.add(it)
@@ -265,6 +271,7 @@ class Form(context: Context, structure: AssistStructure) {
         return if (!isBrowser || webOrigins.isEmpty()) {
             FormOrigin.App(packageName)
         } else if (webOrigins.size == 1) {
+            // FIXME
             // Security assumption on trusted browsers:
             // Every origin that contributes fillable fields to a web page appears at least once as
             // the webDomain of some ViewNode (but not necessarily one that represents a fillable
@@ -277,7 +284,7 @@ class Form(context: Context, structure: AssistStructure) {
             // same origin.
             val fieldsToFill = passwordFields.toMutableList()
             usernameField?.let { fieldsToFill.add(it) }
-            val originsAmongFieldsToFill = fieldsToFill.map { it.webOrigin }
+            val originsAmongFieldsToFill = fieldsToFill.map { it.webOrigin }.toSet()
             if (originsAmongFieldsToFill.size != 1)
                 return null
             val originToFill = originsAmongFieldsToFill.first() ?: return null
@@ -360,5 +367,12 @@ class Form(context: Context, structure: AssistStructure) {
         val credentials = Credentials(username?.toString(), password.toString())
         callback.onSuccess(AutofillSaveActivity.makeSaveIntentSender(context, credentials, formOrigin!!))
     }
-
 }
+
+val AssistStructure.ViewNode.webOrigin: String?
+    @RequiresApi(Build.VERSION_CODES.O)
+    get() = webDomain?.let { domain ->
+        val scheme = (if (Build.VERSION.SDK_INT >= 28) webScheme else null) ?: "http"
+        "$scheme://$domain"
+    }
+

@@ -63,7 +63,9 @@ class FormField(node: AssistStructure.ViewNode) {
         private fun isSupportedHint(hint: String) = hint in HINTS_USERNAME + HINTS_PASSWORD
 
         private val EXCLUDED_TERMS = listOf(
-                "url_bar", // Chrome/Edge address bar
+                "url_bar", // Chrome/Edge/Firefox address bar
+                "url_field", // Opera address bar
+                "location_bar_edit_text", // Samsung address bar
                 "search",
                 "find"
         )
@@ -78,52 +80,65 @@ class FormField(node: AssistStructure.ViewNode) {
                 "name",
                 "email"
         )
-
-        private val SUPPORTED_SCHEMES = listOf("http", "https")
     }
 
     val autofillId: AutofillId = node.autofillId!!
-    val isFocused = node.isFocused
     val autofillValue: AutofillValue? = node.autofillValue
 
+    // Basic autofill exclusion checks
+    private val hasAutofillTypeText = node.autofillType == View.AUTOFILL_TYPE_TEXT
+    private val isVisible = node.visibility == View.VISIBLE
+
+    // Information for heuristics and exclusion rules based only on the current field
     private val idEntry = node.idEntry?.toLowerCase(Locale.US) ?: ""
     private val hint = node.hint?.toLowerCase(Locale.US) ?: ""
     private val className: String? = node.className
-    private val hasAutofillTypeText = node.autofillType == View.AUTOFILL_TYPE_TEXT
-    private val autofillHints = node.autofillHints?.filter { isSupportedHint(it) } ?: emptyList()
-    private val isCompatibleWithAutofillHints = if (autofillHints.isEmpty()) true else autofillHints.intersect(HINTS_FILLABLE).isNotEmpty()
-    private val hasAutofillHintPassword = autofillHints.intersect(HINTS_PASSWORD).isNotEmpty()
-    private val hasAutofillHintUsername = autofillHints.intersect(HINTS_USERNAME).isNotEmpty()
     private val inputType = node.inputType
-    private val hasPasswordInputType = isPasswordInputType(inputType)
-    private val isVisible = node.visibility == View.VISIBLE
 
+    // Information for advanced heuristics taking multiple fields and page context into account
+    val isFocused = node.isFocused
+    val webOrigin = node.webOrigin
+
+    // Basic type detection for native fields
+    private val hasPasswordInputType = isPasswordInputType(inputType)
+    private val isAndroidTextField = className in ANDROID_TEXT_FIELD_CLASS_NAMES
+    private val isAndroidPasswordField = isAndroidTextField && hasPasswordInputType
+
+    // Basic type detection for HTML fields
     private val htmlTag = node.htmlInfo?.tag
     private val htmlInputType = node.htmlInfo?.attributes?.firstOrNull { it.first == "type" }?.second
     private val isHtmlField = htmlTag == "input"
     private val isHtmlPasswordField = isHtmlField && htmlInputType in HTML_INPUT_FIELD_TYPES_PASSWORD
     private val isHtmlTextField = isHtmlField && htmlInputType in HTML_INPUT_FIELD_TYPES_FILLABLE
+
+    // Autofill hint detection for native fields
+    private val autofillHints = node.autofillHints?.filter { isSupportedHint(it) } ?: emptyList()
+    private val notExcludedByAutofillHints = if (autofillHints.isEmpty()) true else autofillHints.intersect(HINTS_FILLABLE).isNotEmpty()
+    private val hasAutofillHintPassword = autofillHints.intersect(HINTS_PASSWORD).isNotEmpty()
+    private val hasAutofillHintUsername = autofillHints.intersect(HINTS_USERNAME).isNotEmpty()
+
     // FIXME: Detect W3C hints: https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#autofilling-form-controls%3A-the-autocomplete-attribute
+    // W3C autocomplete hint detection for HTML fields
+    private val htmlAutocomplete = node.htmlInfo?.attributes?.firstOrNull { it.first == "autocomplete" }?.second?.toLowerCase(Locale.US)
+    private val notExcludedByAutocompleteHints = htmlAutocomplete != "off"
+    private val hasAutocompleteHintUsername = htmlAutocomplete == "username"
+    private val hasAutocompleteHintCurrentPassword = htmlAutocomplete == "current-password"
+    private val hasAutocompleteHintNewPassword = htmlAutocomplete == "new-password"
+    private val hasAutocompleteHintPassword = hasAutocompleteHintCurrentPassword || hasAutocompleteHintNewPassword
 
-    val webOrigin = node.webDomain?.let { domain ->
-        val scheme = (if (Build.VERSION.SDK_INT >= 28) node.webScheme else null) ?: "http"
-        "$scheme://$domain"
-    }
-
-    private val isAndroidTextField = className in ANDROID_TEXT_FIELD_CLASS_NAMES
-    private val isAndroidPasswordField = isAndroidTextField && hasPasswordInputType
-
-    val isFillable = isVisible && (isAndroidTextField || isHtmlTextField) && hasAutofillTypeText && isCompatibleWithAutofillHints
+    private val isFillable = isVisible && (isAndroidTextField || isHtmlTextField) && hasAutofillTypeText && notExcludedByAutofillHints && notExcludedByAutocompleteHints
     private val hasExcludedTerm = EXCLUDED_TERMS.any { idEntry.contains(it) || hint.contains(it) }
-    private val shouldBeFilled = isFillable && !hasExcludedTerm
+    val shouldBeFilled = isFillable && !hasExcludedTerm
 
+    // Password field heuristics (based only on the current field)
     private val isPossiblePasswordField = shouldBeFilled && (isAndroidPasswordField || isHtmlPasswordField)
-    private val isCertainPasswordField = isPossiblePasswordField && (isHtmlPasswordField || hasAutofillHintPassword)
+    private val isCertainPasswordField = isPossiblePasswordField && (isHtmlPasswordField || hasAutofillHintPassword || hasAutocompleteHintPassword)
     private val isLikelyPasswordField = isCertainPasswordField || (PASSWORD_HEURISTIC_TERMS.any { idEntry.contains(it) || hint.contains(it) })
     val passwordCertainty = if (isCertainPasswordField) CertaintyLevel.Certain else if (isLikelyPasswordField) CertaintyLevel.Likely else if (isPossiblePasswordField) CertaintyLevel.Possible else CertaintyLevel.Impossible
 
+    // Username field heuristics (based only on the current field)
     private val isPossibleUsernameField = shouldBeFilled && !isPossiblePasswordField
-    private val isCertainUsernameField = isPossibleUsernameField && hasAutofillHintUsername
+    private val isCertainUsernameField = isPossibleUsernameField && (hasAutofillHintUsername && hasAutocompleteHintUsername)
     private val isLikelyUsernameField = isCertainUsernameField || (USERNAME_HEURISTIC_TERMS.any { idEntry.contains(it) || hint.contains(it) })
     val usernameCertainty = if (isCertainUsernameField) CertaintyLevel.Certain else if (isLikelyUsernameField) CertaintyLevel.Likely else if (isPossibleUsernameField) CertaintyLevel.Possible else CertaintyLevel.Impossible
 
@@ -133,7 +148,7 @@ class FormField(node: AssistStructure.ViewNode) {
 
     override fun toString(): String {
         val field = if (isHtmlTextField) "$htmlTag[type=$htmlInputType]" else className
-        val description = "\"$hint\", $idEntry, focused=$isFocused, inputType=$inputType"
+        val description = "\"$hint\", $idEntry, focused=$isFocused, inputType=$inputType, $webOrigin"
         return "$field ($description): password=$passwordCertainty, username=$usernameCertainty"
     }
 }
