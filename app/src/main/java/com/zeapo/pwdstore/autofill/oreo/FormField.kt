@@ -120,7 +120,13 @@ class FormField(node: AssistStructure.ViewNode) {
     // FIXME: Detect W3C hints: https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#autofilling-form-controls%3A-the-autocomplete-attribute
     // W3C autocomplete hint detection for HTML fields
     private val htmlAutocomplete = node.htmlInfo?.attributes?.firstOrNull { it.first == "autocomplete" }?.second?.toLowerCase(Locale.US)
-    private val notExcludedByAutocompleteHints = htmlAutocomplete != "off"
+
+    // Since many site put autocomplete=off on login forms for compliance reasons or since they are
+    // worried of the user's browser automatically (i.e., without any user interaction) filling
+    // them, which we never do, we choose to ignore this hint.
+    // TODO: Revisit this decision in the future and potentially use the following instead:
+    // private val notExcludedByAutocompleteHints = htmlAutocomplete != "off"
+    private val notExcludedByAutocompleteHints = true
     private val hasAutocompleteHintUsername = htmlAutocomplete == "username"
     private val hasAutocompleteHintCurrentPassword = htmlAutocomplete == "current-password"
     private val hasAutocompleteHintNewPassword = htmlAutocomplete == "new-password"
