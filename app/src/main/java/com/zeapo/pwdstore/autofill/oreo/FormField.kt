@@ -126,9 +126,13 @@ class FormField(node: AssistStructure.ViewNode) {
     private val hasAutocompleteHintNewPassword = htmlAutocomplete == "new-password"
     private val hasAutocompleteHintPassword = hasAutocompleteHintCurrentPassword || hasAutocompleteHintNewPassword
 
-    private val isFillable = isVisible && (isAndroidTextField || isHtmlTextField) && hasAutofillTypeText && notExcludedByAutofillHints && notExcludedByAutocompleteHints
+    val isFillable = isVisible && (isAndroidTextField || isHtmlTextField) && hasAutofillTypeText && notExcludedByAutofillHints && notExcludedByAutocompleteHints
+
+    // Exclude fields based on hint and resource ID
+    // Note: We still report excluded fields as fillable since they allow adjacency heuristics,
+    // but ensure that they are never detected as password or username fields.
     private val hasExcludedTerm = EXCLUDED_TERMS.any { idEntry.contains(it) || hint.contains(it) }
-    val shouldBeFilled = isFillable && !hasExcludedTerm
+    private val shouldBeFilled = isFillable && !hasExcludedTerm
 
     // Password field heuristics (based only on the current field)
     private val isPossiblePasswordField = shouldBeFilled && (isAndroidPasswordField || isHtmlPasswordField)

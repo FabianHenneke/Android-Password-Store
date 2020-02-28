@@ -160,7 +160,7 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         trackOrigin(node)
         val field = FormField(node)
         // FIXME: Improve origin detection by considering iframes and restricting to the list returned by adb shell settings get global autofill_compat_mode_allowed_packages
-        if (field.shouldBeFilled) {
+        if (field.isFillable) {
             d { "$field" }
             fillableFields.add(field)
         } else {
