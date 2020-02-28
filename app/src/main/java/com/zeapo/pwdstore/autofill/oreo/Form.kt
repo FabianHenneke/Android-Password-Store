@@ -350,10 +350,13 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
     fun fillCredentials(context: Context, matchedFiles: List<File>, callback: FillCallback) {
         check(canBeFilled)
         val fillResponse = FillResponse.Builder().run {
-            for (file in matchedFiles)
-                addDataset(makeFillMatchDataset(context, file))
-            addDataset(makeSearchAndFillDataset(context))
-            addDataset(makeGenerateAndFillDataset(context))
+            if (passwordFields.size == 1 || isManualRequest) {
+                for (file in matchedFiles)
+                    addDataset(makeFillMatchDataset(context, file))
+                addDataset(makeSearchAndFillDataset(context))
+            }
+            if (passwordFields.size == 2 || isManualRequest)
+                addDataset(makeGenerateAndFillDataset(context))
             setClientState(clientState)
             setIgnoredIds(*ignoredIds.toTypedArray())
             val saveInfo = makeSaveInfo()
