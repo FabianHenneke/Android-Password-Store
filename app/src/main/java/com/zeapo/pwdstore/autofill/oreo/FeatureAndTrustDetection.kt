@@ -91,6 +91,8 @@ private val BROWSERS_WITH_MULTI_ORIGIN_SUPPORT = listOf(
         "org.mozilla.fenix",
         "org.mozilla.fenix.nightly",
         "org.mozilla.fennec_aurora",
+        "org.mozilla.firefox",
+        "org.mozilla.firefox_beta",
         "org.torproject.torbrowser"
 )
 

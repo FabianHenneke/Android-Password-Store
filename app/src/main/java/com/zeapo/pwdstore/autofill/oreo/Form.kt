@@ -2,6 +2,7 @@ package com.zeapo.pwdstore.autofill.oreo
 
 import android.app.assist.AssistStructure
 import android.content.Context
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -12,6 +13,7 @@ import android.service.autofill.FillResponse
 import android.service.autofill.SaveInfo
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
+import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import com.github.ajalt.timberkt.d
 import com.zeapo.pwdstore.R
@@ -292,20 +294,36 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         }
     }
 
-    private fun makeAuthenticationDataset(context: Context, file: File?): Dataset {
-        val remoteView = makeRemoteView(context, file, formOrigin!!)
+    private fun makePlaceholderDataset(remoteView: RemoteViews, intentSender: IntentSender): Dataset {
         return Dataset.Builder(remoteView).run {
             usernameField?.fillWith(this, "PLACEHOLDER")
             for (passwordField in passwordFields) {
                 passwordField.fillWith(this, "PLACEHOLDER")
             }
-            val intent = if (file != null)
-                AutofillDecryptActivity.makeDecryptFileIntentSender(file, context)
-            else
-                AutofillFilterView.makeMatchAndDecryptFileIntentSender(context, formOrigin)
-            setAuthentication(intent)
+            setAuthentication(intentSender)
             build()
         }
+    }
+
+    private fun makeFillMatchDataset(context: Context, file: File): Dataset {
+        check(formOrigin != null)
+        val remoteView = makeFillMatchRemoteView(context, file, formOrigin)
+        val intentSender = AutofillDecryptActivity.makeDecryptFileIntentSender(file, context)
+        return makePlaceholderDataset(remoteView, intentSender)
+    }
+
+    private fun makeSearchAndFillDataset(context: Context): Dataset {
+        check(formOrigin != null)
+        val remoteView = makeSearchAndFillRemoteView(context, formOrigin)
+        val intentSender = AutofillFilterView.makeMatchAndDecryptFileIntentSender(context, formOrigin)
+        return makePlaceholderDataset(remoteView, intentSender)
+    }
+
+    private fun makeGenerateAndFillDataset(context: Context): Dataset {
+        check(formOrigin != null)
+        val remoteView = makeGenerateAndFillRemoteView(context, formOrigin)
+        val intentSender = AutofillSaveActivity.makeSaveIntentSender(context, null, formOrigin)
+        return makePlaceholderDataset(remoteView, intentSender)
     }
 
     private fun makeSaveInfo(): SaveInfo? {
@@ -322,6 +340,7 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         }
 
         return SaveInfo.Builder(saveDataTypes, idsToSave.toTypedArray()).run {
+            // FIXME
             if (isBrowser)
                 setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE)
             build()
@@ -332,8 +351,9 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         check(canBeFilled)
         val fillResponse = FillResponse.Builder().run {
             for (file in matchedFiles)
-                addDataset(makeAuthenticationDataset(context, file))
-            addDataset(makeAuthenticationDataset(context, null))
+                addDataset(makeFillMatchDataset(context, file))
+            addDataset(makeSearchAndFillDataset(context))
+            addDataset(makeGenerateAndFillDataset(context))
             setClientState(clientState)
             setIgnoredIds(*ignoredIds.toTypedArray())
             val saveInfo = makeSaveInfo()

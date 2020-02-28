@@ -32,6 +32,7 @@ import androidx.fragment.app.FragmentManager
 import androidx.preference.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
+import com.zeapo.pwdstore.autofill.oreo.AutofillMatcher
 import com.zeapo.pwdstore.crypto.PgpActivity
 import com.zeapo.pwdstore.crypto.PgpActivity.Companion.getLongName
 import com.zeapo.pwdstore.git.GitActivity
@@ -654,6 +655,7 @@ class PasswordStore : AppCompatActivity() {
                             // TODO this should show a warning to the user
                             Timber.tag(TAG).e("Something went wrong while moving.")
                         } else {
+                            AutofillMatcher.updateMatchesFor(this, source, destinationFile)
                             commitChange(this.resources
                                     .getString(
                                             R.string.git_commit_move_text,

@@ -315,4 +315,5 @@
     <string name="password_generator_category_title">Password Generator</string>
     <string name="tap_clear_clipboard">Tap here to clear clipboard</string>
     <string name="clone_git_repo">Clone a git repository to sync changes</string>
+    <string name="oreo_autofill_generate_password">Generate password...</string>
 </resources>

@@ -74,19 +74,24 @@ private fun makeRemoteView(context: Context, title: String, summary: String, ico
     }
 }
 
-fun makeRemoteView(context: Context, file: File?, formOrigin: FormOrigin): RemoteViews {
-    val title: String
-    val summary: String
-    val iconRes: Int
-    if (file != null) {
-        title = formOrigin.getPrettyIdentifier(context, indicateTrust = false)
-        summary = file.nameWithoutExtension
-        iconRes = R.drawable.ic_person_black_24dp
-    } else {
-        title = formOrigin.getPrettyIdentifier(context, indicateTrust = true)
-        summary = context.getString(R.string.oreo_autofill_search_in_store)
-        iconRes = R.mipmap.ic_launcher
-    }
+fun makeFillMatchRemoteView(context: Context, file: File, formOrigin: FormOrigin): RemoteViews {
+    val title = formOrigin.getPrettyIdentifier(context, indicateTrust = false)
+    val summary = file.nameWithoutExtension
+    val iconRes = R.drawable.ic_person_black_24dp
+    return makeRemoteView(context, title, summary, iconRes)
+}
+
+fun makeSearchAndFillRemoteView(context: Context, formOrigin: FormOrigin): RemoteViews {
+    val title = formOrigin.getPrettyIdentifier(context, indicateTrust = true)
+    val summary = context.getString(R.string.oreo_autofill_search_in_store)
+    val iconRes = R.drawable.ic_search_black_24dp
+    return makeRemoteView(context, title, summary, iconRes)
+}
+
+fun makeGenerateAndFillRemoteView(context: Context, formOrigin: FormOrigin): RemoteViews {
+    val title = formOrigin.getPrettyIdentifier(context, indicateTrust = true)
+    val summary = context.getString(R.string.oreo_autofill_generate_password)
+    val iconRes = R.drawable.ic_autofill_new_password
     return makeRemoteView(context, title, summary, iconRes)
 }
 

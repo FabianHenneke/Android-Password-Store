@@ -86,18 +86,7 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
 
     private val suggestedPass: String? by lazy { intent.getStringExtra("SUGGESTED_PASS") }
     private val suggestedExtra: String? by lazy { intent.getStringExtra("SUGGESTED_EXTRA") }
-
-    private val shouldMatchWith: FormOrigin? by lazy {
-        val shouldMatchApp: String? = intent.getStringExtra("SHOULD_MATCH_APP")
-        val shouldMatchWeb: String? = intent.getStringExtra("SHOULD_MATCH_WEB")
-        if (shouldMatchApp != null && shouldMatchWeb == null) {
-            FormOrigin.App(shouldMatchApp)
-        } else if (shouldMatchApp == null && shouldMatchWeb != null) {
-            FormOrigin.Web(shouldMatchWeb)
-        } else {
-            null
-        }
-    }
+    private val shouldGeneratePassword: Boolean by lazy { intent.getBooleanExtra("GENERATE_PASSWORD", false) }
 
     private val operation: String by lazy { intent.getStringExtra("OPERATION") }
     private val repoPath: String by lazy { intent.getStringExtra("REPO_PATH") }
@@ -168,12 +157,7 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
                 setContentView(R.layout.encrypt_layout)
 
                 generate_password?.setOnClickListener {
-                    when (settings.getString("pref_key_pwgen_type", KEY_PWGEN_TYPE_CLASSIC)) {
-                        KEY_PWGEN_TYPE_CLASSIC -> PasswordGeneratorDialogFragment()
-                                .show(supportFragmentManager, "generator")
-                        KEY_PWGEN_TYPE_XKPASSWD -> XkPasswordGeneratorDialogFragment()
-                                .show(supportFragmentManager, "xkpwgenerator")
-                    }
+                    generatePassword()
                 }
 
                 title = getString(R.string.new_password_title)
@@ -183,6 +167,10 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
                     crypto_password_edit.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 }
                 suggestedExtra?.let { crypto_extra_edit.setText(it) }
+                if (shouldGeneratePassword) {
+                    generatePassword()
+                    crypto_password_edit.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                }
             }
         }
     }
@@ -190,6 +178,15 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
     override fun onResume() {
         super.onResume()
         LocalBroadcastManager.getInstance(this).registerReceiver(receiver, IntentFilter(ACTION_CLEAR))
+    }
+
+    private fun generatePassword() {
+        when (settings.getString("pref_key_pwgen_type", KEY_PWGEN_TYPE_CLASSIC)) {
+            KEY_PWGEN_TYPE_CLASSIC -> PasswordGeneratorDialogFragment()
+                .show(supportFragmentManager, "generator")
+            KEY_PWGEN_TYPE_XKPASSWD -> XkPasswordGeneratorDialogFragment()
+                .show(supportFragmentManager, "xkpwgenerator")
+        }
     }
 
     override fun onStop() {
@@ -505,7 +502,8 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
         data.putExtra(OpenPgpApi.EXTRA_REQUEST_ASCII_ARMOR, true)
 
         // TODO Check if we could use PasswordEntry to generate the file
-        val iStream = ByteArrayInputStream("$editPass\n$editExtra".toByteArray(Charset.forName("UTF-8")))
+        val content = "$editPass\n$editExtra"
+        val iStream = ByteArrayInputStream(content.toByteArray(Charset.forName("UTF-8")))
         val oStream = ByteArrayOutputStream()
 
         val path = if (intent.getBooleanExtra("fromDecrypt", false)) fullPath else "$fullPath/$editName.gpg"
@@ -517,7 +515,8 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
                         RESULT_CODE_SUCCESS -> {
                             try {
                                 // TODO This might fail, we should check that the write is successful
-                                val outputStream = FileUtils.openOutputStream(File(path))
+                                val file = File(path)
+                                val outputStream = FileUtils.openOutputStream(file)
                                 outputStream.write(oStream.toByteArray())
                                 outputStream.close()
 
@@ -532,10 +531,10 @@ class PgpActivity : AppCompatActivity(), OpenPgpServiceConnection.OnBound {
                                     returnIntent.putExtra("needCommit", true)
                                 }
 
-                                // If this entry has been created by Oreo Autofill, match it with
-                                // the autofilled form's origin.
-                                shouldMatchWith?.let {
-                                    AutofillMatcher.addMatchFor(applicationContext, it, File(path))
+                                if (shouldGeneratePassword) {
+                                    val entry = PasswordEntry(content)
+                                    returnIntent.putExtra("PASSWORD", entry.password)
+                                    returnIntent.putExtra("USERNAME", entry.username ?: file.nameWithoutExtension)
                                 }
 
                                 setResult(RESULT_OK, returnIntent)

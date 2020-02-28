@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.core.content.edit
 import com.github.ajalt.timberkt.Timber.e
+import com.github.ajalt.timberkt.i
 import java.io.File
 
 
@@ -25,7 +26,7 @@ private fun Context.matchPreferences(formOrigin: FormOrigin): SharedPreferences 
 
 class AutofillMatcher {
     companion object {
-        private const val MAX_NUM_MATCHES = 5
+        private const val MAX_NUM_MATCHES = 10
 
         private fun tokenKey(formOrigin: FormOrigin.App) = "token;${formOrigin.identifier}"
         private fun matchesKey(formOrigin: FormOrigin) = "matches;${formOrigin.identifier}"
@@ -101,6 +102,33 @@ class AutofillMatcher {
                 putStringSet(matchesKey(formOrigin), newFiles.map { it.absolutePath }.toSet())
             }
             storeFormOriginHash(context, formOrigin)
+        }
+
+        fun updateMatchesFor(context: Context, file: File, newFile: File) {
+            val oldPath = file.absolutePath
+            val newPath = newFile.absolutePath
+            for ((origin, value) in context.autofillWebMatches.all) {
+                val matches = value as? MutableSet<String> ?: continue
+                if (oldPath in matches) {
+                    matches.remove(oldPath)
+                    matches.add(newPath)
+                    i { "Updating match for $origin: $oldPath --> $newPath" }
+                }
+                context.autofillWebMatches.edit {
+                    putStringSet(origin, matches)
+                }
+            }
+            for ((origin, value) in context.autofillAppMatches.all) {
+                val matches = value as? MutableSet<String> ?: continue
+                if (oldPath in matches) {
+                    matches.remove(oldPath)
+                    matches.add(newPath)
+                    i { "Updating match for $origin: $oldPath --> $newPath" }
+                }
+                context.autofillWebMatches.edit {
+                    putStringSet(origin, matches)
+                }
+            }
         }
     }
 }
