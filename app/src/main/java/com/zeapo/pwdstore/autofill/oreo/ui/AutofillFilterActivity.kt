@@ -35,18 +35,28 @@ import java.util.*
 class AutofillFilterView : AppCompatActivity() {
 
     companion object {
-        private const val EXTRA_FORM_ORIGIN_WEB = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FORM_ORIGIN_WEB"
-        private const val EXTRA_FORM_ORIGIN_APP = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FORM_ORIGIN_APP"
+        private const val EXTRA_FORM_ORIGIN_WEB =
+            "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FORM_ORIGIN_WEB"
+        private const val EXTRA_FORM_ORIGIN_APP =
+            "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FORM_ORIGIN_APP"
         private var matchAndDecryptFileRequestCode = 1
 
-        fun makeMatchAndDecryptFileIntentSender(context: Context, formOrigin: FormOrigin): IntentSender {
+        fun makeMatchAndDecryptFileIntentSender(
+            context: Context,
+            formOrigin: FormOrigin
+        ): IntentSender {
             val intent = Intent(context, AutofillFilterView::class.java).apply {
                 when (formOrigin) {
                     is FormOrigin.Web -> putExtra(EXTRA_FORM_ORIGIN_WEB, formOrigin.identifier)
                     is FormOrigin.App -> putExtra(EXTRA_FORM_ORIGIN_APP, formOrigin.identifier)
                 }
             }
-            return PendingIntent.getActivity(context, matchAndDecryptFileRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender
+            return PendingIntent.getActivity(
+                context,
+                matchAndDecryptFileRequestCode++,
+                intent,
+                PendingIntent.FLAG_CANCEL_CURRENT
+            ).intentSender
         }
     }
 
@@ -103,12 +113,16 @@ class AutofillFilterView : AppCompatActivity() {
         }
 
         search.addTextChangedListener { recursiveFilter(it.toString(), strict = false) }
-        val initialFilter = formOrigin.getPrettyIdentifier(applicationContext, indicateTrust = false)
+        val initialFilter =
+            formOrigin.getPrettyIdentifier(applicationContext, indicateTrust = false)
         search.setText(initialFilter, TextView.BufferType.EDITABLE)
         recursiveFilter(initialFilter, strict = formOrigin is FormOrigin.Web)
 
         shouldMatch.apply {
-            text = getString(R.string.oreo_autofill_match_with, formOrigin.getPrettyIdentifier(applicationContext))
+            text = getString(
+                R.string.oreo_autofill_match_with,
+                formOrigin.getPrettyIdentifier(applicationContext)
+            )
         }
 
         overlay.setOnClickListener {
@@ -117,19 +131,26 @@ class AutofillFilterView : AppCompatActivity() {
     }
 
     private fun decryptAndFill(item: PasswordItem) {
-        if (shouldClear.isChecked)
-            AutofillMatcher.clearMatchesFor(applicationContext, formOrigin)
-        if (shouldMatch.isChecked)
-            AutofillMatcher.addMatchFor(applicationContext, formOrigin, item.file)
+        if (shouldClear.isChecked) AutofillMatcher.clearMatchesFor(applicationContext, formOrigin)
+        if (shouldMatch.isChecked) AutofillMatcher.addMatchFor(
+            applicationContext,
+            formOrigin,
+            item.file
+        )
         // intent?.extras? is checked to be non-null in onCreate
-        startActivityForResult(AutofillDecryptActivity.makeDecryptFileIntent(item.file, intent!!.extras!!, this), 1)
+        startActivityForResult(
+            AutofillDecryptActivity.makeDecryptFileIntent(
+                item.file,
+                intent!!.extras!!,
+                this
+            ), 1
+        )
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 1) {
-            if (resultCode == RESULT_OK)
-                setResult(RESULT_OK, data)
+            if (resultCode == RESULT_OK) setResult(RESULT_OK, data)
             finish()
         }
     }
@@ -138,9 +159,16 @@ class AutofillFilterView : AppCompatActivity() {
         val root = PasswordRepository.getRepositoryDirectory(this)
         // on the root the pathStack is empty
         val passwordItems = if (dir == null) {
-            PasswordRepository.getPasswords(PasswordRepository.getRepositoryDirectory(this), sortOrder)
+            PasswordRepository.getPasswords(
+                PasswordRepository.getRepositoryDirectory(this),
+                sortOrder
+            )
         } else {
-            PasswordRepository.getPasswords(dir, PasswordRepository.getRepositoryDirectory(this), sortOrder)
+            PasswordRepository.getPasswords(
+                dir,
+                PasswordRepository.getRepositoryDirectory(this),
+                sortOrder
+            )
         }
 
         for (item in passwordItems) {
@@ -149,10 +177,12 @@ class AutofillFilterView : AppCompatActivity() {
             }
 
             // TODO: Implement fuzzy search if strict == false?
-            val matches = if (strict)
-                item.file.parentFile.name.let { it == filter || it.endsWith(".$filter") || it.endsWith("://$filter") }
-            else
-                "${item.file.relativeTo(root).path}/${item.file.nameWithoutExtension}".toLowerCase(Locale.getDefault()).contains(filter.toLowerCase(Locale.getDefault()))
+            val matches = if (strict) item.file.parentFile.name.let {
+                it == filter || it.endsWith(".$filter") || it.endsWith("://$filter")
+            }
+            else "${item.file.relativeTo(root).path}/${item.file.nameWithoutExtension}".toLowerCase(
+                Locale.getDefault()
+            ).contains(filter.toLowerCase(Locale.getDefault()))
 
             val inAdapter = dataSource.contains(item)
             if (item.type == PasswordItem.TYPE_PASSWORD && matches && !inAdapter) {

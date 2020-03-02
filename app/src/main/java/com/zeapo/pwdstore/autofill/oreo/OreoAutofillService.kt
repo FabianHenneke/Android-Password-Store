@@ -15,26 +15,30 @@ class OreoAutofillService : AutofillService() {
     companion object {
         // FIXME: Provide a user-configurable denylist
         private val DENYLISTED_PACKAGES = listOf(
-                BuildConfig.APPLICATION_ID,
-                "android",
-                "com.android.settings",
-                "com.android.settings.intelligence",
-                "com.android.systemui",
-                "com.android.vending",
-                "com.oneplus.applocker",
-                "org.sufficientlysecure.keychain"
+            BuildConfig.APPLICATION_ID,
+            "android",
+            "com.android.settings",
+            "com.android.settings.intelligence",
+            "com.android.systemui",
+            "com.android.vending",
+            "com.oneplus.applocker",
+            "org.sufficientlysecure.keychain"
         )
     }
 
-    override fun onFillRequest(request: FillRequest, cancellationSignal: CancellationSignal, callback: FillCallback) {
-        if (request.fillContexts.size != 1)
-            d { "Unusual number of fillContexts: ${request.fillContexts.size}" }
+    override fun onFillRequest(
+        request: FillRequest,
+        cancellationSignal: CancellationSignal,
+        callback: FillCallback
+    ) {
+        if (request.fillContexts.size != 1) d { "Unusual number of fillContexts: ${request.fillContexts.size}" }
         val structureToFill = request.fillContexts.lastOrNull()?.structure
         if (structureToFill == null) {
             callback.onSuccess(null)
             return
         }
-        val isManualRequest = request.flags and FillRequest.FLAG_MANUAL_REQUEST == FillRequest.FLAG_MANUAL_REQUEST
+        val isManualRequest =
+            request.flags and FillRequest.FLAG_MANUAL_REQUEST == FillRequest.FLAG_MANUAL_REQUEST
         if (structureToFill.activityComponent.packageName in DENYLISTED_PACKAGES && !isManualRequest) {
             callback.onSuccess(null)
             return
@@ -45,7 +49,8 @@ class OreoAutofillService : AutofillService() {
             callback.onSuccess(null)
             return
         }
-        val matchedFiles = AutofillMatcher.getMatchesFor(applicationContext, formToFill.formOrigin!!)
+        val matchedFiles =
+            AutofillMatcher.getMatchesFor(applicationContext, formToFill.formOrigin!!)
         formToFill.fillCredentials(this, matchedFiles, callback)
     }
 
@@ -53,8 +58,7 @@ class OreoAutofillService : AutofillService() {
         // SaveCallback's behavior and feature set differs based on both target and device SDK, so
         // we replace it with a wrapper that works the same in all situations.
         @Suppress("NAME_SHADOWING") val callback = FixedSaveCallback(this, callback)
-        if (request.fillContexts.size != 1)
-            w { "Unusual number of fillContexts: ${request.fillContexts.size}" }
+        if (request.fillContexts.size != 1) w { "Unusual number of fillContexts: ${request.fillContexts.size}" }
         val structureToFill = request.fillContexts.lastOrNull()?.structure
         if (structureToFill == null) {
             callback.onFailure(getString(R.string.oreo_autofill_save_app_not_supported))

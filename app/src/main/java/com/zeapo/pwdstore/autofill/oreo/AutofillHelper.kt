@@ -35,38 +35,43 @@ private fun stableHash(array: Collection<ByteArray>): String {
 }
 
 fun computeCertificatesHash(context: Context, packageName: String): String {
-    val signaturesOld = context.packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
+    val signaturesOld =
+        context.packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
     val stableHashOld = stableHash(signaturesOld.map { it.toByteArray() })
     if (Build.VERSION.SDK_INT >= 28) {
-        val info = context.packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-        val signaturesNew = info.signingInfo.signingCertificateHistory
-                ?: info.signingInfo.apkContentsSigners
+        val info = context.packageManager.getPackageInfo(
+            packageName,
+            PackageManager.GET_SIGNING_CERTIFICATES
+        )
+        val signaturesNew =
+            info.signingInfo.signingCertificateHistory ?: info.signingInfo.apkContentsSigners
         val stableHashNew = stableHash(signaturesNew.map { it.toByteArray() })
-        if (stableHashNew != stableHashOld)
-            tag("CertificatesHash").e { "Mismatch between old and new hash: $stableHashNew != $stableHashOld" }
+        if (stableHashNew != stableHashOld) tag("CertificatesHash").e { "Mismatch between old and new hash: $stableHashNew != $stableHashOld" }
     }
     return stableHashOld
 }
 
 fun getCanonicalDomain(host: String): String? {
     var idn = InternetDomainName.from(host)
-    while (idn != null && !idn.isTopPrivateDomain)
-        idn = idn.parent()
+    while (idn != null && !idn.isTopPrivateDomain) idn = idn.parent()
     return idn.toString()
 }
 
 data class Credentials(val username: String?, val password: String) {
     companion object {
         fun fromStoreEntry(file: File, entry: PasswordEntry): Credentials {
-            return if (entry.hasUsername())
-                Credentials(entry.username, entry.password)
-            else
-                Credentials(file.nameWithoutExtension, entry.password)
+            return if (entry.hasUsername()) Credentials(entry.username, entry.password)
+            else Credentials(file.nameWithoutExtension, entry.password)
         }
     }
 }
 
-private fun makeRemoteView(context: Context, title: String, summary: String, iconRes: Int): RemoteViews {
+private fun makeRemoteView(
+    context: Context,
+    title: String,
+    summary: String,
+    iconRes: Int
+): RemoteViews {
     return RemoteViews(context.packageName, R.layout.oreo_autofill_dataset).apply {
         setTextViewText(R.id.title, title)
         setTextViewText(R.id.summary, summary)
@@ -108,8 +113,11 @@ class FixedSaveCallback(context: Context, private val callback: SaveCallback) {
         callback.onFailure(message)
         // When targeting SDK 29, the message is no longer shown as a toast.
         // See https://developer.android.com/reference/android/service/autofill/SaveCallback#onFailure(java.lang.CharSequence)
-        if (applicationContext.applicationInfo.targetSdkVersion >= 29)
-            Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
+        if (applicationContext.applicationInfo.targetSdkVersion >= 29) Toast.makeText(
+            applicationContext,
+            message,
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     fun onSuccess(intentSender: IntentSender) {

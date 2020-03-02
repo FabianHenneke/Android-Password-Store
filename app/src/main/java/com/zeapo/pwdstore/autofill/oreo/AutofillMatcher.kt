@@ -8,6 +8,7 @@ import com.github.ajalt.timberkt.Timber.e
 import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.i
 import com.github.ajalt.timberkt.w
+import com.zeapo.pwdstore.R
 import java.io.File
 
 
@@ -31,10 +32,12 @@ class AutofillMatcher {
         private const val MAX_NUM_MATCHES = 10
 
         private const val PREFERENCE_PREFIX_TOKEN = "token;"
-        private fun tokenKey(formOrigin: FormOrigin.App) = "$PREFERENCE_PREFIX_TOKEN${formOrigin.identifier}"
+        private fun tokenKey(formOrigin: FormOrigin.App) =
+            "$PREFERENCE_PREFIX_TOKEN${formOrigin.identifier}"
 
         private const val PREFERENCE_PREFIX_MATCHES = "matches;"
-        private fun matchesKey(formOrigin: FormOrigin) = "$PREFERENCE_PREFIX_MATCHES${formOrigin.identifier}"
+        private fun matchesKey(formOrigin: FormOrigin) =
+            "$PREFERENCE_PREFIX_MATCHES${formOrigin.identifier}"
 
         private fun hasFormOriginHashChanged(context: Context, formOrigin: FormOrigin): Boolean {
             return when (formOrigin) {
@@ -42,7 +45,8 @@ class AutofillMatcher {
                 is FormOrigin.App -> {
                     val packageName = formOrigin.identifier
                     val certificatesHash = computeCertificatesHash(context, packageName)
-                    val storedCertificatesHash = context.autofillAppMatches.getString(tokenKey(formOrigin), null)
+                    val storedCertificatesHash =
+                        context.autofillAppMatches.getString(tokenKey(formOrigin), null)
                             ?: return false
                     val hashHasChanged = certificatesHash != storedCertificatesHash
                     if (hashHasChanged) {
@@ -69,11 +73,16 @@ class AutofillMatcher {
 
         fun getMatchesFor(context: Context, formOrigin: FormOrigin): List<File> {
             if (hasFormOriginHashChanged(context, formOrigin)) {
-                Toast.makeText(context, "The app's publisher has changed; this may be a phishing attempt.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    "The app's publisher has changed; this may be a phishing attempt.",
+                    Toast.LENGTH_LONG
+                ).show()
                 return emptyList()
             }
             val matchPreferences = context.matchPreferences(formOrigin)
-            val matchedFiles = matchPreferences.getStringSet(matchesKey(formOrigin), emptySet())!!.map { File(it) }
+            val matchedFiles =
+                matchPreferences.getStringSet(matchesKey(formOrigin), emptySet())!!.map { File(it) }
             return matchedFiles.filter { it.exists() }.also { validFiles ->
                 matchPreferences.edit {
                     putStringSet(matchesKey(formOrigin), validFiles.map { it.absolutePath }.toSet())
@@ -84,23 +93,31 @@ class AutofillMatcher {
         fun clearMatchesFor(context: Context, formOrigin: FormOrigin) {
             context.matchPreferences(formOrigin).edit {
                 remove(matchesKey(formOrigin))
-                if (formOrigin is FormOrigin.App)
-                    remove(tokenKey(formOrigin))
+                if (formOrigin is FormOrigin.App) remove(tokenKey(formOrigin))
             }
         }
 
         fun addMatchFor(context: Context, formOrigin: FormOrigin, file: File) {
-            if (!file.exists())
-                return
+            if (!file.exists()) return
             if (hasFormOriginHashChanged(context, formOrigin)) {
-                Toast.makeText(context, "The app's publisher has changed; this may be a phishing attempt.", Toast.LENGTH_LONG).show()
+                // FIXME: Show a warning as RemoteViews and disable autofill?
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.oreo_autofill_publisher_changed),
+                    Toast.LENGTH_LONG
+                ).show()
                 return
             }
             val matchPreferences = context.matchPreferences(formOrigin)
-            val matchedFiles = matchPreferences.getStringSet(matchesKey(formOrigin), emptySet())!!.map { File(it) }
+            val matchedFiles =
+                matchPreferences.getStringSet(matchesKey(formOrigin), emptySet())!!.map { File(it) }
             val newFiles = setOf(file.absoluteFile).union(matchedFiles)
             if (newFiles.size > MAX_NUM_MATCHES) {
-                Toast.makeText(context, "Maximum number of matches ($MAX_NUM_MATCHES) reached; clear matches before adding new ones", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.oreo_autofill_max_matches_reached, MAX_NUM_MATCHES),
+                    Toast.LENGTH_LONG
+                ).show()
                 return
             }
             matchPreferences.edit {
@@ -116,8 +133,7 @@ class AutofillMatcher {
             val newPath = newFile.absolutePath
             for (prefs in listOf(context.autofillAppMatches, context.autofillWebMatches)) {
                 for ((key, value) in prefs.all) {
-                    if (!key.startsWith(PREFERENCE_PREFIX_MATCHES))
-                        continue
+                    if (!key.startsWith(PREFERENCE_PREFIX_MATCHES)) continue
                     val matches = value as? MutableSet<String>
                     if (matches == null) {
                         w { "Failed to read matches for $key" }

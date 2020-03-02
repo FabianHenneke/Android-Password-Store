@@ -251,6 +251,9 @@
     <string name="oreo_autofill_save_app_not_supported">This app is currently not supported</string>
     <string name="oreo_autofill_save_no_password_field">Can only fill single-step login forms</string>
     <string name="oreo_autofill_save_invalid_password">Couldn\'t extract password, please use a different browser for now</string>
+    <string name="oreo_autofill_generate_password">Generate password…</string>
+    <string name="oreo_autofill_publisher_changed">The app\'s publisher has changed; this may be a phishing attempt.</string>
+    <string name="oreo_autofill_max_matches_reached">Maximum number of matches (%1$d) reached; clear matches before adding new ones.</string>
 
     <!-- Autofill -->
     <string name="autofill_description">Autofills password fields in apps. Only works for Android versions 4.3 and up. Does not rely on the clipboard for Android versions 5.0 and up.</string>
@@ -315,5 +318,4 @@
     <string name="password_generator_category_title">Password Generator</string>
     <string name="tap_clear_clipboard">Tap here to clear clipboard</string>
     <string name="clone_git_repo">Clone a git repository to sync changes</string>
-    <string name="oreo_autofill_generate_password">Generate password...</string>
 </resources>

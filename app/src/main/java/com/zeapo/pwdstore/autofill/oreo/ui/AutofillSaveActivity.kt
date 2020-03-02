@@ -19,40 +19,52 @@ import com.zeapo.pwdstore.autofill.oreo.Form
 import com.zeapo.pwdstore.autofill.oreo.FormOrigin
 import com.zeapo.pwdstore.crypto.PgpActivity
 import com.zeapo.pwdstore.utils.PasswordRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 
 @RequiresApi(Build.VERSION_CODES.O)
 class AutofillSaveActivity : Activity() {
 
     companion object {
-        private const val EXTRA_FOLDER_NAME = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FOLDER_NAME"
+        private const val EXTRA_FOLDER_NAME =
+            "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FOLDER_NAME"
         private const val EXTRA_PASSWORD = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_PASSWORD"
         private const val EXTRA_USERNAME = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_USERNAME"
-        private const val EXTRA_SHOULD_MATCH_APP = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_SHOULD_MATCH_APP"
-        private const val EXTRA_SHOULD_MATCH_WEB = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_SHOULD_MATCH_WEB"
-        private const val EXTRA_GENERATE_PASSWORD = "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_GENERATE_PASSWORD"
+        private const val EXTRA_SHOULD_MATCH_APP =
+            "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_SHOULD_MATCH_APP"
+        private const val EXTRA_SHOULD_MATCH_WEB =
+            "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_SHOULD_MATCH_WEB"
+        private const val EXTRA_GENERATE_PASSWORD =
+            "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_GENERATE_PASSWORD"
 
         private var saveRequestCode = 1
 
-        fun makeSaveIntentSender(context: Context, credentials: Credentials?, formOrigin: FormOrigin): IntentSender {
+        fun makeSaveIntentSender(
+            context: Context,
+            credentials: Credentials?,
+            formOrigin: FormOrigin
+        ): IntentSender {
             val identifier = formOrigin.getPrettyIdentifier(context, indicateTrust = false)
             val sanitizedIdentifier = identifier.replace("""[\\\/]""", "")
-            val folderName = sanitizedIdentifier.takeUnless { it.isBlank() }
-                    ?: formOrigin.identifier
+            val folderName =
+                sanitizedIdentifier.takeUnless { it.isBlank() } ?: formOrigin.identifier
             val intent = Intent(context, AutofillSaveActivity::class.java).apply {
-                putExtras(bundleOf(
+                putExtras(
+                    bundleOf(
                         EXTRA_FOLDER_NAME to folderName,
                         EXTRA_PASSWORD to credentials?.password,
                         EXTRA_USERNAME to credentials?.username,
                         EXTRA_SHOULD_MATCH_APP to formOrigin.identifier.takeIf { formOrigin is FormOrigin.App },
                         EXTRA_SHOULD_MATCH_WEB to formOrigin.identifier.takeIf { formOrigin is FormOrigin.Web },
                         EXTRA_GENERATE_PASSWORD to (credentials == null)
-                ))
+                    )
+                )
             }
-            return PendingIntent.getActivity(context, saveRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender
+            return PendingIntent.getActivity(
+                context,
+                saveRequestCode++,
+                intent,
+                PendingIntent.FLAG_CANCEL_CURRENT
+            ).intentSender
         }
     }
 
@@ -75,14 +87,16 @@ class AutofillSaveActivity : Activity() {
         val suggestedExtra = if (username != null) "username: $username" else null
 
         val saveIntent = Intent(this, PgpActivity::class.java).apply {
-            putExtras(bundleOf(
+            putExtras(
+                bundleOf(
                     "REPO_PATH" to repo.absolutePath,
                     "FILE_PATH" to repo.resolve(intent.getStringExtra(EXTRA_FOLDER_NAME)).absolutePath,
                     "OPERATION" to "ENCRYPT",
                     "SUGGESTED_PASS" to intent.getStringExtra(EXTRA_PASSWORD),
                     "SUGGESTED_EXTRA" to suggestedExtra,
                     "GENERATE_PASSWORD" to intent.getBooleanExtra(EXTRA_GENERATE_PASSWORD, false)
-            ))
+                )
+            )
         }
         startActivityForResult(saveIntent, PasswordStore.REQUEST_CODE_ENCRYPT)
     }
@@ -101,11 +115,12 @@ class AutofillSaveActivity : Activity() {
             val password = data.getStringExtra("PASSWORD")
             val username = data.getStringExtra("USERNAME")
             if (password != null) {
-                val clientState = intent?.getBundleExtra(AutofillManager.EXTRA_CLIENT_STATE) ?: run {
-                    e { "AutofillDecryptActivity started without EXTRA_CLIENT_STATE" }
-                    finish()
-                    return
-                }
+                val clientState =
+                    intent?.getBundleExtra(AutofillManager.EXTRA_CLIENT_STATE) ?: run {
+                        e { "AutofillDecryptActivity started without EXTRA_CLIENT_STATE" }
+                        finish()
+                        return
+                    }
                 val credentials = Credentials(username, password)
                 val fillInDataset = Form.makeFillInDataset(this, credentials, clientState)
                 setResult(RESULT_OK, Intent().apply {

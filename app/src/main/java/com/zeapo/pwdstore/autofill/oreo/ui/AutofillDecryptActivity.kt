@@ -19,7 +19,6 @@ import me.msfjarvis.openpgpktx.util.OpenPgpApi
 import me.msfjarvis.openpgpktx.util.OpenPgpServiceConnection
 import org.openintents.openpgp.IOpenPgpService2
 import org.openintents.openpgp.OpenPgpError
-import timber.log.Timber
 import java.io.*
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
@@ -47,7 +46,12 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
             val intent = Intent(context, AutofillDecryptActivity::class.java).apply {
                 putExtra(EXTRA_FILE_PATH, file.absolutePath)
             }
-            return PendingIntent.getActivity(context, decryptFileRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT).intentSender
+            return PendingIntent.getActivity(
+                context,
+                decryptFileRequestCode++,
+                intent,
+                PendingIntent.FLAG_CANCEL_CURRENT
+            ).intentSender
         }
     }
 
@@ -73,7 +77,8 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
             if (credentials == null) {
                 setResult(RESULT_CANCELED)
             } else {
-                val fillInDataset = Form.makeFillInDataset(this@AutofillDecryptActivity, credentials, clientState)
+                val fillInDataset =
+                    Form.makeFillInDataset(this@AutofillDecryptActivity, credentials, clientState)
                 withContext(Dispatchers.Main) {
                     setResult(RESULT_OK, Intent().apply {
                         putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, fillInDataset)
@@ -91,26 +96,35 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
         coroutineContext.cancelChildren()
     }
 
-    private suspend fun executeOpenPgpApi(data: Intent, input: InputStream, output: OutputStream): Intent? {
+    private suspend fun executeOpenPgpApi(
+        data: Intent,
+        input: InputStream,
+        output: OutputStream
+    ): Intent? {
         var openPgpServiceConnection: OpenPgpServiceConnection? = null
         val openPgpService = suspendCoroutine<IOpenPgpService2> { cont ->
-            openPgpServiceConnection = OpenPgpServiceConnection(this, OPENPGP_PROVIDER,
-                    object : OpenPgpServiceConnection.OnBound {
-                        override fun onBound(service: IOpenPgpService2) {
-                            cont.resume(service)
-                        }
+            openPgpServiceConnection = OpenPgpServiceConnection(
+                this,
+                OPENPGP_PROVIDER,
+                object : OpenPgpServiceConnection.OnBound {
+                    override fun onBound(service: IOpenPgpService2) {
+                        cont.resume(service)
+                    }
 
-                        override fun onError(e: Exception) {
-                            cont.resumeWithException(e)
-                        }
-                    }).also { it.bindToService() }
+                    override fun onError(e: Exception) {
+                        cont.resumeWithException(e)
+                    }
+                }).also { it.bindToService() }
         }
         return OpenPgpApi(this, openPgpService).executeApi(data, input, output).also {
             openPgpServiceConnection?.unbindFromService()
         }
     }
 
-    private suspend fun decryptUsernameAndPassword(file: File, resumeIntent: Intent? = null): Credentials? {
+    private suspend fun decryptUsernameAndPassword(
+        file: File,
+        resumeIntent: Intent? = null
+    ): Credentials? {
         val command = resumeIntent ?: Intent().apply {
             action = OpenPgpApi.ACTION_DECRYPT_VERIFY
         }
@@ -127,7 +141,8 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
             e(e) { "OpenPgpApi ACTION_DECRYPT_VERIFY failed" }
             return null
         }
-        return when (val resultCode = result?.getIntExtra(OpenPgpApi.RESULT_CODE, OpenPgpApi.RESULT_CODE_ERROR)) {
+        return when (val resultCode =
+            result?.getIntExtra(OpenPgpApi.RESULT_CODE, OpenPgpApi.RESULT_CODE_ERROR)) {
             OpenPgpApi.RESULT_CODE_SUCCESS -> {
                 try {
                     val entry = withContext(Dispatchers.IO) {
@@ -140,30 +155,36 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
                 }
             }
             OpenPgpApi.RESULT_CODE_USER_INTERACTION_REQUIRED -> {
-                val pendingIntent: PendingIntent = result.getParcelableExtra(OpenPgpApi.RESULT_INTENT)
+                val pendingIntent: PendingIntent =
+                    result.getParcelableExtra(OpenPgpApi.RESULT_INTENT)
                 try {
                     val intentToResume = withContext(Dispatchers.Main) {
                         suspendCoroutine<Intent> { cont ->
                             continueAfterUserInteraction = cont
                             startIntentSenderForResult(
-                                    pendingIntent.intentSender,
-                                    REQUEST_CODE_CONTINUE_AFTER_USER_INTERACTION,
-                                    null,
-                                    0,
-                                    0,
-                                    0)
+                                pendingIntent.intentSender,
+                                REQUEST_CODE_CONTINUE_AFTER_USER_INTERACTION,
+                                null,
+                                0,
+                                0,
+                                0
+                            )
                         }
                     }
                     decryptUsernameAndPassword(file, intentToResume)
                 } catch (e: Exception) {
-                    e(e) { "OpenPgpApi ACTION_DECRYPT_VERIFY failed with user interaction"}
+                    e(e) { "OpenPgpApi ACTION_DECRYPT_VERIFY failed with user interaction" }
                     null
                 }
             }
             OpenPgpApi.RESULT_CODE_ERROR -> {
                 val error = result.getParcelableExtra<OpenPgpError>(OpenPgpApi.RESULT_ERROR)
                 if (error != null) {
-                    Toast.makeText(applicationContext, "Error from OpenKeyChain: ${error.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        applicationContext,
+                        "Error from OpenKeyChain: ${error.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
                     e { "OpenPgpApi ACTION_DECRYPT_VERIFY failed (${error.errorId}): ${error.message}" }
                 }
                 null
