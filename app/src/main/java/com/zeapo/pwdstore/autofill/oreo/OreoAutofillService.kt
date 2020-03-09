@@ -20,10 +20,11 @@ class OreoAutofillService : AutofillService() {
             "com.android.settings",
             "com.android.settings.intelligence",
             "com.android.systemui",
-            "com.android.vending",
             "com.oneplus.applocker",
             "org.sufficientlysecure.keychain"
         )
+
+        private const val DISABLE_AUTOFILL_DURATION_MS = 1000 * 60 * 60 * 24L
     }
 
     override fun onFillRequest(
@@ -37,21 +38,26 @@ class OreoAutofillService : AutofillService() {
             callback.onSuccess(null)
             return
         }
-        val isManualRequest =
-            request.flags and FillRequest.FLAG_MANUAL_REQUEST == FillRequest.FLAG_MANUAL_REQUEST
-        if (structureToFill.activityComponent.packageName in DENYLISTED_PACKAGES && !isManualRequest) {
-            callback.onSuccess(null)
+        if (structureToFill.activityComponent.packageName in DENYLISTED_PACKAGES) {
+            if (Build.VERSION.SDK_INT >= 28) {
+                callback.onSuccess(FillResponse.Builder().run {
+                    disableAutofill(DISABLE_AUTOFILL_DURATION_MS)
+                    build()
+                })
+            } else {
+                callback.onSuccess(null)
+            }
             return
         }
+        val isManualRequest =
+            request.flags and FillRequest.FLAG_MANUAL_REQUEST == FillRequest.FLAG_MANUAL_REQUEST
         val formToFill = Form(this, structureToFill, isManualRequest)
         if (!formToFill.canBeFilled) {
             d { "Form cannot be filled" }
             callback.onSuccess(null)
             return
         }
-        val matchedFiles =
-            AutofillMatcher.getMatchesFor(applicationContext, formToFill.formOrigin!!)
-        formToFill.fillCredentials(this, matchedFiles, callback)
+        formToFill.fillCredentials(this, callback)
     }
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {

@@ -127,8 +127,8 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int) {
     // private val notExcludedByAutocompleteHints = htmlAutocomplete != "off"
     private val notExcludedByAutocompleteHints = true
     private val hasAutocompleteHintUsername = htmlAutocomplete == "username"
-    private val hasAutocompleteHintCurrentPassword = htmlAutocomplete == "current-password"
-    private val hasAutocompleteHintNewPassword = htmlAutocomplete == "new-password"
+    val hasAutocompleteHintCurrentPassword = htmlAutocomplete == "current-password"
+    val hasAutocompleteHintNewPassword = htmlAutocomplete == "new-password"
     private val hasAutocompleteHintPassword =
         hasAutocompleteHintCurrentPassword || hasAutocompleteHintNewPassword
 
@@ -166,12 +166,12 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int) {
         builder.setValue(autofillId, AutofillValue.forText(value))
     }
 
-    infix fun precedes(that: FormField): Boolean {
-        return index == that.index - 1
+    infix fun precedes(that: FormField?): Boolean {
+        return index == (that ?: return false).index - 1
     }
 
-    infix fun follows(that: FormField): Boolean {
-        return index == that.index + 1
+    infix fun follows(that: FormField?): Boolean {
+        return index == (that ?: return false).index + 1
     }
 
     override fun toString(): String {

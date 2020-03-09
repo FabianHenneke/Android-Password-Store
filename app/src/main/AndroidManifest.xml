@@ -86,8 +86,14 @@
             android:configChanges="orientation|keyboardHidden"
             android:windowSoftInputMode="adjustNothing"
             android:theme="@style/NoBackgroundTheme" />
-        <activity android:name=".autofill.oreo.ui.AutofillSaveActivity"
+        <activity
+            android:name=".autofill.oreo.ui.AutofillSaveActivity"
             android:theme="@style/NoBackgroundTheme"/>
+        <activity
+            android:name=".autofill.oreo.ui.AutofillPublisherChangedActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:windowSoftInputMode="adjustNothing"
+            android:theme="@style/NoBackgroundTheme" />
     </application>
 
 </manifest>

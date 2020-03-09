@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.service.autofill.Dataset
 import android.service.autofill.FillCallback
 import android.service.autofill.FillResponse
@@ -20,6 +21,7 @@ import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.autofill.oreo.CertaintyLevel.*
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillDecryptActivity
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillFilterView
+import com.zeapo.pwdstore.autofill.oreo.ui.AutofillPublisherChangedActivity
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillSaveActivity
 import java.io.File
 import kotlin.math.abs
@@ -75,8 +77,7 @@ sealed class FormOrigin(open val identifier: String) {
             is Web -> identifier
             is App -> {
                 val info = context.packageManager.getApplicationInfo(
-                    identifier,
-                    PackageManager.GET_META_DATA
+                    identifier, PackageManager.GET_META_DATA
                 )
                 val label = context.packageManager.getApplicationLabel(info)
                 if (indicateTrust) "“$label”"
@@ -96,16 +97,13 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         const val BUNDLE_KEY_PASSWORD_IDS = "passwordIds"
 
         fun makeFillInDataset(
-            context: Context,
-            credentials: Credentials,
-            clientState: Bundle
+            context: Context, credentials: Credentials, clientState: Bundle
         ): Dataset {
             val remoteView = makePlaceholderRemoteView(context)
             return Dataset.Builder(remoteView).run {
                 val usernameId = clientState.getParcelable<AutofillId>(BUNDLE_KEY_USERNAME_ID)
                 if (usernameId != null && credentials.username != null) setValue(
-                    usernameId,
-                    AutofillValue.forText(credentials.username)
+                    usernameId, AutofillValue.forText(credentials.username)
                 )
                 val passwordIds =
                     clientState.getParcelableArrayList<AutofillId>(BUNDLE_KEY_PASSWORD_IDS)
@@ -241,8 +239,7 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
     }
 
     private fun takeFieldRightBeforePasswordFields(
-        fields: List<FormField>,
-        alwaysTakeSingleField: Boolean = false
+        fields: List<FormField>, alwaysTakeSingleField: Boolean = false
     ): FormField? {
         if (fields.isEmpty()) return null
         if (fields.size == 1 && alwaysTakeSingleField) return fields.single()
@@ -301,8 +298,7 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
     }
 
     private fun makePlaceholderDataset(
-        remoteView: RemoteViews,
-        intentSender: IntentSender
+        remoteView: RemoteViews, intentSender: IntentSender
     ): Dataset {
         return Dataset.Builder(remoteView).run {
             usernameField?.fillWith(this, "PLACEHOLDER")
@@ -336,6 +332,20 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         return makePlaceholderDataset(remoteView, intentSender)
     }
 
+    private fun makeWarningDataset(context: Context, appPackage: String): Dataset {
+        val remoteView = makeWarningRemoteView(context)
+        val intentSender  = AutofillPublisherChangedActivity.makePublisherChangedIntentSender(context, appPackage)
+        return makePlaceholderDataset(remoteView, intentSender)
+    }
+
+    private fun makeWarningResponse(context: Context): FillResponse {
+        return FillResponse.Builder().run {
+            addDataset(makeWarningDataset(context))
+            setIgnoredIds(*ignoredIds.toTypedArray())
+            build()
+        }
+    }
+
     private fun makeSaveInfo(): SaveInfo? {
         // TODO: Support multi-step authentication flows
         if (passwordFields.isEmpty()) return null
@@ -355,18 +365,28 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         }
     }
 
-    fun fillCredentials(context: Context, matchedFiles: List<File>, callback: FillCallback) {
+    fun makeFillResponse(context: Context, callback: FillCallback) {
+        val toFill = autofillStrategy.apply(fillableFields, !isBrowser || isBrowserSupportingMultiOrigin)
+    }
+
+    fun fillCredentials(context: Context, callback: FillCallback) {
         check(canBeFilled)
+        val matchedFiles = try {
+            AutofillMatcher.getMatchesFor(context, formOrigin!!)
+        } catch (e: AutofillSecurityException) {
+            callback.onSuccess(makeWarningResponse(context))
+            return
+        }
         val fillResponse = FillResponse.Builder().run {
             if (passwordFields.size == 1 || isManualRequest) {
                 for (file in matchedFiles) addDataset(makeFillMatchDataset(context, file))
                 addDataset(makeSearchAndFillDataset(context))
             }
-            if (passwordFields.size == 2 || isManualRequest) addDataset(
-                makeGenerateAndFillDataset(
-                    context
-                )
-            )
+            if (passwordFields.size == 2 || isManualRequest) {
+                addDataset(makeGenerateAndFillDataset(context))
+            }
+            // FIXME
+            addDataset(makeWarningDataset(context, (formOrigin as? FormOrigin.App)?.identifier ?: "com.android.chrome"))
             setClientState(clientState)
             setIgnoredIds(*ignoredIds.toTypedArray())
             val saveInfo = makeSaveInfo()
@@ -399,9 +419,7 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         val credentials = Credentials(username?.toString(), password.toString())
         callback.onSuccess(
             AutofillSaveActivity.makeSaveIntentSender(
-                context,
-                credentials,
-                formOrigin!!
+                context, credentials, formOrigin!!
             )
         )
     }

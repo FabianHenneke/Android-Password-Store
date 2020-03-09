@@ -40,8 +40,7 @@ fun computeCertificatesHash(context: Context, packageName: String): String {
     val stableHashOld = stableHash(signaturesOld.map { it.toByteArray() })
     if (Build.VERSION.SDK_INT >= 28) {
         val info = context.packageManager.getPackageInfo(
-            packageName,
-            PackageManager.GET_SIGNING_CERTIFICATES
+            packageName, PackageManager.GET_SIGNING_CERTIFICATES
         )
         val signaturesNew =
             info.signingInfo.signingCertificateHistory ?: info.signingInfo.apkContentsSigners
@@ -67,10 +66,7 @@ data class Credentials(val username: String?, val password: String) {
 }
 
 private fun makeRemoteView(
-    context: Context,
-    title: String,
-    summary: String,
-    iconRes: Int
+    context: Context, title: String, summary: String, iconRes: Int
 ): RemoteViews {
     return RemoteViews(context.packageName, R.layout.oreo_autofill_dataset).apply {
         setTextViewText(R.id.title, title)
@@ -104,6 +100,15 @@ fun makePlaceholderRemoteView(context: Context): RemoteViews {
     return makeRemoteView(context, "PLACEHOLDER", "PLACEHOLDER", R.mipmap.ic_launcher)
 }
 
+class AutofillSecurityException(message: String) : Exception(message)
+
+fun makeWarningRemoteView(context: Context): RemoteViews {
+    val title = "Possible phishing attempt detected"
+    val summary = "Tap for details"
+    val iconRes = R.drawable.ic_warning_red_24dp
+    return makeRemoteView(context, title, summary, iconRes)
+}
+
 @RequiresApi(Build.VERSION_CODES.O)
 class FixedSaveCallback(context: Context, private val callback: SaveCallback) {
 
@@ -113,11 +118,9 @@ class FixedSaveCallback(context: Context, private val callback: SaveCallback) {
         callback.onFailure(message)
         // When targeting SDK 29, the message is no longer shown as a toast.
         // See https://developer.android.com/reference/android/service/autofill/SaveCallback#onFailure(java.lang.CharSequence)
-        if (applicationContext.applicationInfo.targetSdkVersion >= 29) Toast.makeText(
-            applicationContext,
-            message,
-            Toast.LENGTH_LONG
-        ).show()
+        if (applicationContext.applicationInfo.targetSdkVersion >= 29) {
+            Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
+        }
     }
 
     fun onSuccess(intentSender: IntentSender) {

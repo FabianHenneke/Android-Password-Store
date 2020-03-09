@@ -73,12 +73,7 @@ class AutofillMatcher {
 
         fun getMatchesFor(context: Context, formOrigin: FormOrigin): List<File> {
             if (hasFormOriginHashChanged(context, formOrigin)) {
-                Toast.makeText(
-                    context,
-                    "The app's publisher has changed; this may be a phishing attempt.",
-                    Toast.LENGTH_LONG
-                ).show()
-                return emptyList()
+                throw AutofillSecurityException(context.getString(R.string.oreo_autofill_publisher_changed))
             }
             val matchPreferences = context.matchPreferences(formOrigin)
             val matchedFiles =
@@ -99,14 +94,9 @@ class AutofillMatcher {
 
         fun addMatchFor(context: Context, formOrigin: FormOrigin, file: File) {
             if (!file.exists()) return
+            // FIXME
             if (hasFormOriginHashChanged(context, formOrigin)) {
-                // FIXME: Show a warning as RemoteViews and disable autofill?
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.oreo_autofill_publisher_changed),
-                    Toast.LENGTH_LONG
-                ).show()
-                return
+                throw AutofillSecurityException(context.getString(R.string.oreo_autofill_publisher_changed))
             }
             val matchPreferences = context.matchPreferences(formOrigin)
             val matchedFiles =
