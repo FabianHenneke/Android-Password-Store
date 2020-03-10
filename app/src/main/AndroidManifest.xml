@@ -52,7 +52,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.accessibilityservice"
-                android:resource="@xml/autofill_config" />
+                android:resource="@xml/oreo_autofill_config" />
         </service>
         <service
           android:name=".ClipboardService"
@@ -85,15 +85,15 @@
             android:name=".autofill.oreo.ui.AutofillFilterView"
             android:configChanges="orientation|keyboardHidden"
             android:windowSoftInputMode="adjustNothing"
-            android:theme="@style/NoBackgroundTheme" />
+            android:theme="@style/DialogLikeTheme" />
         <activity
             android:name=".autofill.oreo.ui.AutofillSaveActivity"
-            android:theme="@style/NoBackgroundTheme"/>
+            android:theme="@style/DialogLikeTheme"/>
         <activity
             android:name=".autofill.oreo.ui.AutofillPublisherChangedActivity"
             android:configChanges="orientation|keyboardHidden"
             android:windowSoftInputMode="adjustNothing"
-            android:theme="@style/NoBackgroundTheme" />
+            android:theme="@style/DialogLikeTheme" />
     </application>
 
 </manifest>

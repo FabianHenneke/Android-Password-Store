@@ -4,6 +4,7 @@
  */
 package com.zeapo.pwdstore.autofill.oreo.ui
 
+import android.annotation.SuppressLint
 import android.annotation.TargetApi
 import android.app.PendingIntent
 import android.content.Context
@@ -20,7 +21,6 @@ import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.autofill.oreo.AutofillMatcher
 import com.zeapo.pwdstore.autofill.oreo.FormOrigin
 import com.zeapo.pwdstore.autofill.oreo.computeCertificatesHash
-import kotlinx.android.synthetic.main.activity_oreo_autofill_filter.overlay
 import kotlinx.android.synthetic.main.activity_oreo_publisher_changed.*
 
 @TargetApi(Build.VERSION_CODES.O)
@@ -48,6 +48,7 @@ class AutofillPublisherChangedActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_oreo_publisher_changed)
+        setFinishOnTouchOutside(true)
 
         appPackage = intent.getStringExtra(EXTRA_APP_PACKAGE) ?: run {
             e { "AutofillPublisherChangedActivity started without EXTRA_PACKAGE_NAME" }
@@ -57,10 +58,9 @@ class AutofillPublisherChangedActivity : AppCompatActivity() {
         supportActionBar?.hide()
         showPackageInfo()
 
-        overlay.setOnClickListener { finish() }
         okButton.setOnClickListener { finish() }
         advancedButton.setOnClickListener {
-            advancedButton.visibility = View.GONE
+            advancedButton.visibility = View.INVISIBLE
             warningAppAdvancedInfo.visibility = View.VISIBLE
             resetButton.visibility = View.VISIBLE
         }
@@ -75,10 +75,10 @@ class AutofillPublisherChangedActivity : AppCompatActivity() {
         val installTime = DateUtils.getRelativeTimeSpanString(packageInfo.firstInstallTime)
         warningAppInstallDate.text = getString(R.string.oreo_autofill_warning_publisher_install_time, installTime)
         val appInfo = packageManager.getApplicationInfo(appPackage, PackageManager.GET_META_DATA)
-        warningAppName.text = packageManager.getApplicationLabel(appInfo)
+        warningAppName.text = "“${packageManager.getApplicationLabel(appInfo)}”"
 
         val currentHash = computeCertificatesHash(this, appPackage)
-        warningAppAdvancedInfo.text = getString(R.string.oreo_autofill_warning_advanced_info, appPackage, currentHash)
+        warningAppAdvancedInfo.text = getString(R.string.oreo_autofill_warning_publisher_advanced_info_template, appPackage, currentHash)
     }
 }
 

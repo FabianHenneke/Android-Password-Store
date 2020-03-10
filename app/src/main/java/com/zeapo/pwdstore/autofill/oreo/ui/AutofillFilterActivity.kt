@@ -11,13 +11,12 @@ import android.content.Intent
 import android.content.IntentSender
 import android.os.Build
 import android.os.Bundle
-import android.text.SpannableString
-import android.text.style.RelativeSizeSpan
 import android.view.autofill.AutofillManager
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.addTextChangedListener
 import androidx.preference.PreferenceManager
+import androidx.recyclerview.widget.DividerItemDecoration
 import com.afollestad.recyclical.datasource.dataSourceOf
 import com.afollestad.recyclical.setup
 import com.afollestad.recyclical.withItem
@@ -31,10 +30,14 @@ import kotlinx.android.synthetic.main.activity_oreo_autofill_filter.*
 import java.io.File
 import java.util.*
 
+
 @TargetApi(Build.VERSION_CODES.O)
 class AutofillFilterView : AppCompatActivity() {
 
     companion object {
+        private const val HEIGHT_PERCENTAGE = 0.9
+        private const val WIDTH_PERCENTAGE = 0.75
+
         private const val EXTRA_FORM_ORIGIN_WEB =
             "com.zeapo.pwdstore.autofill.oreo.ui.EXTRA_FORM_ORIGIN_WEB"
         private const val EXTRA_FORM_ORIGIN_APP =
@@ -70,6 +73,12 @@ class AutofillFilterView : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_oreo_autofill_filter)
+        setFinishOnTouchOutside(true)
+
+        val params = window.attributes
+        params.height = (HEIGHT_PERCENTAGE * resources.displayMetrics.heightPixels).toInt()
+        params.width = (WIDTH_PERCENTAGE * resources.displayMetrics.widthPixels).toInt()
+        window.attributes = params
 
         if (intent?.hasExtra(AutofillManager.EXTRA_CLIENT_STATE) != true) {
             e { "AutofillFilterActivity started without EXTRA_CLIENT_STATE" }
@@ -96,25 +105,25 @@ class AutofillFilterView : AppCompatActivity() {
     }
 
     private fun bindUI() {
-        // setup{} is an extension method on RecyclerView
+        // setup is an extension method provided by recyclical
         rvPassword.setup {
             withDataSource(dataSource)
-            withItem<PasswordItem, PasswordViewHolder>(R.layout.password_row_layout) {
+            withItem<PasswordItem, PasswordViewHolder>(R.layout.oreo_autofill_filter_row) {
                 onBind(::PasswordViewHolder) { _, item ->
-                    val source = "${item.fullPathToParent}\n${item.name.dropLast(4)}"
-                    val spannable = SpannableString(source).apply {
-                        setSpan(RelativeSizeSpan(0.7f), 0, item.fullPathToParent.length, 0)
-                    }
-                    this.label.text = spannable
-                    this.typeImage.setImageResource(R.drawable.ic_action_secure_24dp)
+                    title.text = item.fullPathToParent
+                    // drop the .gpg extension
+                    subtitle.text = item.name.dropLast(4)
                 }
                 onClick { decryptAndFill(item) }
             }
         }
+        rvPassword.apply {
+            addItemDecoration(DividerItemDecoration(context, DividerItemDecoration.VERTICAL))
+        }
 
         search.addTextChangedListener { recursiveFilter(it.toString(), strict = false) }
         val initialFilter =
-            formOrigin.getPrettyIdentifier(applicationContext, indicateTrust = false)
+            formOrigin.getPrettyIdentifier(applicationContext, untrusted = false)
         search.setText(initialFilter, TextView.BufferType.EDITABLE)
         recursiveFilter(initialFilter, strict = formOrigin is FormOrigin.Web)
 
@@ -123,10 +132,6 @@ class AutofillFilterView : AppCompatActivity() {
                 R.string.oreo_autofill_match_with,
                 formOrigin.getPrettyIdentifier(applicationContext)
             )
-        }
-
-        overlay.setOnClickListener {
-            finish()
         }
     }
 

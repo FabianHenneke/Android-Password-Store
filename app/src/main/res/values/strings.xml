@@ -255,9 +255,15 @@
     <string name="oreo_autofill_publisher_changed">The app\'s publisher has changed; this may be a phishing attempt.</string>
     <string name="oreo_autofill_max_matches_reached">Maximum number of matches (%1$d) reached; clear matches before adding new ones.</string>
     <string name="oreo_autofill_warning_publisher_header">This app\'s publisher has changed since you first associated a Password Store entry with it:</string>
-    <string name="oreo_autofill_warning_publisher_footer"><b>The currently installed app may be trying to steal your credentials by pretending to be a trusted app.</b><br/><br/>Try to uninstall and reinstall the app from a trusted source, such as the Play Store, Amazon Appstore, F-Droid, or your phone manufacturer\'s store.</string>
+    <string name="oreo_autofill_warning_publisher_footer"><b>The currently installed app may be trying to steal your credentials by pretending to be a trusted app.</b>\n\nTry to uninstall and reinstall the app from a trusted source, such as the Play Store, Amazon Appstore, F-Droid, or your phone manufacturer\'s store.</string>
     <string name="oreo_autofill_warning_publisher_install_time">Installed: %1$s</string>
-    <string name="oreo_autofill_warning_advanced_info">Package:\n%1$s\nHash:\n%2$s</string>
+    <string name="oreo_autofill_warning_publisher_advanced_info_template">Package:\n%1$s\n\nHash:\n%2$s</string>
+    <string name="oreo_autofill_warning_publisher_advanced_info_button">Advanced information</string>
+    <string name="oreo_autofill_warning_publisher_changed_disable_autofill_button">Keep Autofill disabled</string>
+    <string name="oreo_autofill_warning_publisher_reenable_button">Re-enable Autofill</string>
+    <string name="oreo_autofill_warning_publisher_warning_sign_description">Warning</string>
+    <string name="oreo_autofill_warning_publisher_dataset_summary">Tap for details</string>
+    <string name="oreo_autofill_warning_publisher_dataset_title">Possible phishing attempt</string>
 
     <!-- Autofill -->
     <string name="autofill_description">Autofills password fields in apps. Only works for Android versions 4.3 and up. Does not rely on the clipboard for Android versions 5.0 and up.</string>
@@ -322,6 +328,4 @@
     <string name="password_generator_category_title">Password Generator</string>
     <string name="tap_clear_clipboard">Tap here to clear clipboard</string>
     <string name="clone_git_repo">Clone a git repository to sync changes</string>
-    <string name="oreo_autofill_publisher_changed_disable_autofill">Disable Autofill in this app</string>
-    <string name="oreo_autofill_publisher_changed_advanced_info">Advanced information</string>
 </resources>

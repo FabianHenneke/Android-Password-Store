@@ -76,21 +76,21 @@ private fun makeRemoteView(
 }
 
 fun makeFillMatchRemoteView(context: Context, file: File, formOrigin: FormOrigin): RemoteViews {
-    val title = formOrigin.getPrettyIdentifier(context, indicateTrust = false)
+    val title = formOrigin.getPrettyIdentifier(context, untrusted = false)
     val summary = file.nameWithoutExtension
     val iconRes = R.drawable.ic_person_black_24dp
     return makeRemoteView(context, title, summary, iconRes)
 }
 
 fun makeSearchAndFillRemoteView(context: Context, formOrigin: FormOrigin): RemoteViews {
-    val title = formOrigin.getPrettyIdentifier(context, indicateTrust = true)
+    val title = formOrigin.getPrettyIdentifier(context, untrusted = true)
     val summary = context.getString(R.string.oreo_autofill_search_in_store)
     val iconRes = R.drawable.ic_search_black_24dp
     return makeRemoteView(context, title, summary, iconRes)
 }
 
 fun makeGenerateAndFillRemoteView(context: Context, formOrigin: FormOrigin): RemoteViews {
-    val title = formOrigin.getPrettyIdentifier(context, indicateTrust = true)
+    val title = formOrigin.getPrettyIdentifier(context, untrusted = true)
     val summary = context.getString(R.string.oreo_autofill_generate_password)
     val iconRes = R.drawable.ic_autofill_new_password
     return makeRemoteView(context, title, summary, iconRes)
@@ -103,8 +103,8 @@ fun makePlaceholderRemoteView(context: Context): RemoteViews {
 class AutofillSecurityException(message: String) : Exception(message)
 
 fun makeWarningRemoteView(context: Context): RemoteViews {
-    val title = "Possible phishing attempt detected"
-    val summary = "Tap for details"
+    val title = context.getString(R.string.oreo_autofill_warning_publisher_dataset_title)
+    val summary = context.getString(R.string.oreo_autofill_warning_publisher_dataset_summary)
     val iconRes = R.drawable.ic_warning_red_24dp
     return makeRemoteView(context, title, summary, iconRes)
 }

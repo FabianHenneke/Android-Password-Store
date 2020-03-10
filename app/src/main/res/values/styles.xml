@@ -37,13 +37,9 @@
         <item name="hintTextColor">?attr/colorOnPrimary</item>
     </style>
 
-    <style name="NoBackgroundTheme" parent="AppTheme">
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowContentOverlay">@null</item>
+    <style name="DialogLikeTheme" parent="AppTheme">
         <item name="android:windowActionBar">false</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowIsFloating">true</item>
-        <item name="android:background">@android:color/transparent</item>
         <item name="android:backgroundDimEnabled">true</item>
         <!-- Needs to be set without android: prefix as per https://stackoverflow.com/a/33417456 -->
         <item name="windowNoTitle">true</item>

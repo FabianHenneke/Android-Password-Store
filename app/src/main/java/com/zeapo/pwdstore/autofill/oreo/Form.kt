@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.ContactsContract
 import android.service.autofill.Dataset
 import android.service.autofill.FillCallback
 import android.service.autofill.FillResponse
@@ -72,7 +71,7 @@ sealed class FormOrigin(open val identifier: String) {
     data class Web(override val identifier: String) : FormOrigin(identifier)
     data class App(override val identifier: String) : FormOrigin(identifier)
 
-    fun getPrettyIdentifier(context: Context, indicateTrust: Boolean = true): String {
+    fun getPrettyIdentifier(context: Context, untrusted: Boolean = true): String {
         return when (this) {
             is Web -> identifier
             is App -> {
@@ -80,8 +79,7 @@ sealed class FormOrigin(open val identifier: String) {
                     identifier, PackageManager.GET_META_DATA
                 )
                 val label = context.packageManager.getApplicationLabel(info)
-                if (indicateTrust) "“$label”"
-                else "$label"
+                if (untrusted) "“$label”" else "$label"
             }
         }
     }
@@ -338,9 +336,9 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         return makePlaceholderDataset(remoteView, intentSender)
     }
 
-    private fun makeWarningResponse(context: Context): FillResponse {
+    private fun makeWarningResponse(context: Context, appPackage: String): FillResponse {
         return FillResponse.Builder().run {
-            addDataset(makeWarningDataset(context))
+            addDataset(makeWarningDataset(context, appPackage))
             setIgnoredIds(*ignoredIds.toTypedArray())
             build()
         }
@@ -374,7 +372,8 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         val matchedFiles = try {
             AutofillMatcher.getMatchesFor(context, formOrigin!!)
         } catch (e: AutofillSecurityException) {
-            callback.onSuccess(makeWarningResponse(context))
+            // FIXME
+            callback.onSuccess(makeWarningResponse(context, (formOrigin as? FormOrigin.App)?.identifier ?: "com.android.chrome"))
             return
         }
         val fillResponse = FillResponse.Builder().run {

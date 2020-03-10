@@ -43,7 +43,7 @@ class AutofillSaveActivity : Activity() {
             credentials: Credentials?,
             formOrigin: FormOrigin
         ): IntentSender {
-            val identifier = formOrigin.getPrettyIdentifier(context, indicateTrust = false)
+            val identifier = formOrigin.getPrettyIdentifier(context, untrusted = false)
             val sanitizedIdentifier = identifier.replace("""[\\\/]""", "")
             val folderName =
                 sanitizedIdentifier.takeUnless { it.isBlank() } ?: formOrigin.identifier

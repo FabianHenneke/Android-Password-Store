@@ -5,12 +5,11 @@
 package com.zeapo.pwdstore.autofill.oreo.ui
 
 import android.view.View
-import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.zeapo.pwdstore.R
 
 class PasswordViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-    val typeImage: ImageView = itemView.findViewById(R.id.type_image)
-    val label: TextView = itemView.findViewById(R.id.label)
+    val title: TextView = itemView.findViewById(R.id.title)
+    val subtitle: TextView = itemView.findViewById(R.id.subtitle)
 }
