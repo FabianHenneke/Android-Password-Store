@@ -166,11 +166,11 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int) {
         builder.setValue(autofillId, AutofillValue.forText(value))
     }
 
-    infix fun precedes(that: FormField?): Boolean {
+    infix fun directlyPrecedes(that: FormField?): Boolean {
         return index == (that ?: return false).index - 1
     }
 
-    infix fun follows(that: FormField?): Boolean {
+    infix fun directlyFollows(that: FormField?): Boolean {
         return index == (that ?: return false).index + 1
     }
 

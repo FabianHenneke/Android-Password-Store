@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.github.ajalt.timberkt.e
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.autofill.oreo.AutofillMatcher
+import com.zeapo.pwdstore.autofill.oreo.AutofillPublisherChangedException
 import com.zeapo.pwdstore.autofill.oreo.FormOrigin
 import com.zeapo.pwdstore.autofill.oreo.computeCertificatesHash
 import kotlinx.android.synthetic.main.activity_oreo_publisher_changed.*
@@ -32,10 +33,10 @@ class AutofillPublisherChangedActivity : AppCompatActivity() {
         private var publisherChangedRequestCode = 1
 
         fun makePublisherChangedIntentSender(
-            context: Context, appPackage: String
+            context: Context, publisherChangedException: AutofillPublisherChangedException
         ): IntentSender {
             val intent = Intent(context, AutofillPublisherChangedActivity::class.java).apply {
-                putExtra(EXTRA_APP_PACKAGE, appPackage)
+                putExtra(EXTRA_APP_PACKAGE, publisherChangedException.appPackage)
             }
             return PendingIntent.getActivity(
                 context, publisherChangedRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT

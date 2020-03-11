@@ -9,7 +9,7 @@ val autofillStrategy = strategy {
     fillRule {
         stopOnMatch = true
         requiresMultiOriginSupport = false
-        password {
+        genericPassword {
             takeSingle {
                 passwordCertainty == Certain && hasAutocompleteHintCurrentPassword && isFocused
             }
@@ -23,7 +23,7 @@ val autofillStrategy = strategy {
 
     generateRule {
         requiresMultiOriginSupport = false
-        password {
+        genericPassword {
             takeSingle {
                 passwordCertainty == Certain && hasAutocompleteHintNewPassword && isFocused
             }
@@ -37,7 +37,7 @@ val autofillStrategy = strategy {
 
     fillRule {
         requiresMultiOriginSupport = false
-        password {
+        genericPassword {
             takeSingle { passwordCertainty >= Possible && isFocused }
             breakTieOnSingle { passwordCertainty >= Likely }
             breakTieOnSingle { passwordCertainty >= Certain }

@@ -16,6 +16,7 @@ import com.zeapo.pwdstore.PasswordEntry
 import com.zeapo.pwdstore.R
 import java.io.File
 import java.security.MessageDigest
+import kotlin.random.Random
 
 
 private fun ByteArray.sha256(): ByteArray {
@@ -47,7 +48,8 @@ fun computeCertificatesHash(context: Context, packageName: String): String {
         val stableHashNew = stableHash(signaturesNew.map { it.toByteArray() })
         if (stableHashNew != stableHashOld) tag("CertificatesHash").e { "Mismatch between old and new hash: $stableHashNew != $stableHashOld" }
     }
-    return stableHashOld
+    // FIXME
+    return if (Random.nextBoolean()) stableHashOld else stableHashOld + "fake"
 }
 
 fun getCanonicalDomain(host: String): String? {
@@ -99,8 +101,6 @@ fun makeGenerateAndFillRemoteView(context: Context, formOrigin: FormOrigin): Rem
 fun makePlaceholderRemoteView(context: Context): RemoteViews {
     return makeRemoteView(context, "PLACEHOLDER", "PLACEHOLDER", R.mipmap.ic_launcher)
 }
-
-class AutofillSecurityException(message: String) : Exception(message)
 
 fun makeWarningRemoteView(context: Context): RemoteViews {
     val title = context.getString(R.string.oreo_autofill_warning_publisher_dataset_title)

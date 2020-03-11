@@ -1,52 +1,161 @@
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.os.Build
+import android.os.Bundle
+import android.view.autofill.AutofillId
 import androidx.annotation.RequiresApi
 
 @DslMarker
 annotation class AutofillDsl
 
-enum class AutofillScenarioType {
-    Fill,
-    Generate,
-}
-
 @RequiresApi(Build.VERSION_CODES.O)
-data class AutofillScenario(val type: AutofillScenarioType, val username: FormField?, val password: List<FormField>)
+sealed class AutofillScenario {
+    abstract val username: FormField?
 
-@RequiresApi(Build.VERSION_CODES.O)
-interface FieldMatcher {
-    fun apply(fields: List<FormField>, alreadyMatched: List<FormField>): List<FormField>?
+    class Builder {
+        var username: FormField? = null
+        val currentPassword = mutableListOf<FormField>()
+        val newPassword = mutableListOf<FormField>()
+        val genericPassword = mutableListOf<FormField>()
 
-    @AutofillDsl
-    class Builder : SingleFieldMatcher.Builder() {
-
-        fun takePair(block: Pair<FormField, FormField>.(alreadyMatched: List<FormField>) -> Boolean) {
-            check(takeSingle == null && takePair == null) { "Every block can only have at most one take{Single,Pair} block" }
-            takePair = block
+        fun build(): AutofillScenario {
+            require(genericPassword.isEmpty() || (currentPassword.isEmpty() || newPassword.isEmpty()))
+            return if (currentPassword.isNotEmpty() || newPassword.isNotEmpty()) PreciseAutofillScenario(
+                username = username, currentPassword = currentPassword, newPassword = newPassword
+            )
+            else GenericAutofillScenario(
+                username = username, genericPassword = genericPassword
+            )
         }
+    }
 
-        fun breakTieOnPair(block: Pair<FormField, FormField>.() -> Boolean) {
-            check(takePair != null) { "Every block needs a takePair block before a breakTieOnPair block" }
-            check(takeSingle == null) { "takeSingle cannot be mixed with breakTieOnPair" }
-            tieBreakersPair.add(block)
+    fun toAutofillScenarioIds(): AutofillScenarioIds {
+        val builder = AutofillScenarioIds.Builder()
+        builder.username = username?.autofillId
+        when (this) {
+            is PreciseAutofillScenario -> {
+                builder.currentPassword.addAll(currentPassword.map { it.autofillId })
+                builder.newPassword.addAll(newPassword.map { it.autofillId })
+            }
+            is GenericAutofillScenario -> {
+                builder.genericPassword.addAll(genericPassword.map { it.autofillId })
+            }
+        }
+        return builder.build()
+    }
+
+    val allFields: List<FormField> by lazy {
+        listOfNotNull(username).toMutableList().apply {
+            when (this@AutofillScenario) {
+                is PreciseAutofillScenario -> {
+                    addAll(currentPassword)
+                    addAll(newPassword)
+                }
+                is GenericAutofillScenario -> {
+                    addAll(genericPassword)
+                }
+            }
         }
     }
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-class SingleFieldMatcher(
-    private val take: (FormField, List<FormField>) -> Boolean,
-    private val tieBreakers: List<(FormField) -> Boolean>
-) : FieldMatcher {
+data class PreciseAutofillScenario(
+    override val username: FormField?,
+    val currentPassword: List<FormField>,
+    val newPassword: List<FormField>
+) : AutofillScenario()
+
+@RequiresApi(Build.VERSION_CODES.O)
+data class GenericAutofillScenario(
+    override val username: FormField?, val genericPassword: List<FormField>
+) : AutofillScenario()
+
+@RequiresApi(Build.VERSION_CODES.O)
+sealed class AutofillScenarioIds {
+    companion object {
+        private const val BUNDLE_KEY_USERNAME_ID = "usernameId"
+        private const val BUNDLE_KEY_CURRENT_PASSWORD_IDS = "currentPasswordIds"
+        private const val BUNDLE_KEY_NEW_PASSWORD_IDS = "newPasswordIds"
+        private const val BUNDLE_KEY_GENERIC_PASSWORD_IDS = "genericPasswordIds"
+
+        fun fromClientState(clientState: Bundle): AutofillScenarioIds {
+            return Builder().apply {
+                username = clientState.getParcelable(BUNDLE_KEY_USERNAME_ID)
+                currentPassword.addAll(clientState.getParcelableArrayList(
+                    BUNDLE_KEY_CURRENT_PASSWORD_IDS) ?: emptyList())
+                newPassword.addAll(clientState.getParcelableArrayList(
+                    BUNDLE_KEY_NEW_PASSWORD_IDS) ?: emptyList())
+                genericPassword.addAll(clientState.getParcelableArrayList(
+                    BUNDLE_KEY_GENERIC_PASSWORD_IDS) ?: emptyList())
+            }.build()
+        }
+    }
+
+    abstract val username: AutofillId?
+
+    class Builder {
+        var username: AutofillId? = null
+        val currentPassword = mutableListOf<AutofillId>()
+        val newPassword = mutableListOf<AutofillId>()
+        val genericPassword = mutableListOf<AutofillId>()
+
+        fun build(): AutofillScenarioIds {
+            require(genericPassword.isEmpty() || (currentPassword.isEmpty() || newPassword.isEmpty()))
+            return if (currentPassword.isNotEmpty() || newPassword.isNotEmpty()) {
+                PreciseAutofillScenarioIds(
+                    username = username,
+                    currentPassword = ArrayList(currentPassword),
+                    newPassword = ArrayList(newPassword)
+                )
+            } else {
+                GenericAutofillScenarioIds(username = username, genericPassword = ArrayList(genericPassword))
+            }
+        }
+    }
+
+    fun toClientState(): Bundle {
+        return when (this) {
+            is PreciseAutofillScenarioIds ->  {
+                Bundle(3).apply {
+                    putParcelable(BUNDLE_KEY_USERNAME_ID, username)
+                    putParcelableArrayList(BUNDLE_KEY_CURRENT_PASSWORD_IDS, currentPassword)
+                    putParcelableArrayList(BUNDLE_KEY_NEW_PASSWORD_IDS, newPassword)
+                }
+            }
+            is GenericAutofillScenarioIds -> {
+                Bundle(2).apply {
+                    putParcelable(BUNDLE_KEY_USERNAME_ID, username)
+                    putParcelableArrayList(BUNDLE_KEY_GENERIC_PASSWORD_IDS, genericPassword)
+                }
+            }
+        }
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+data class PreciseAutofillScenarioIds(
+    override val username: AutofillId?,
+    val currentPassword: ArrayList<AutofillId>,
+    val newPassword: ArrayList<AutofillId>
+) : AutofillScenarioIds()
+
+@RequiresApi(Build.VERSION_CODES.O)
+data class GenericAutofillScenarioIds(
+    override val username: AutofillId?, val genericPassword: ArrayList<AutofillId>
+) : AutofillScenarioIds()
+
+@RequiresApi(Build.VERSION_CODES.O)
+interface FieldMatcher {
+    fun match(fields: List<FormField>, alreadyMatched: List<FormField>): List<FormField>?
 
     @AutofillDsl
-    open class Builder {
-        protected var takeSingle: (FormField.(List<FormField>) -> Boolean)? = null
+    class Builder {
+        private var takeSingle: (FormField.(List<FormField>) -> Boolean)? = null
         private val tieBreakersSingle: MutableList<FormField.() -> Boolean> = mutableListOf()
 
-        protected var takePair: (Pair<FormField, FormField>.(List<FormField>) -> Boolean)? = null
-        protected var tieBreakersPair: MutableList<Pair<FormField, FormField>.() -> Boolean> =
+        private var takePair: (Pair<FormField, FormField>.(List<FormField>) -> Boolean)? = null
+        private var tieBreakersPair: MutableList<Pair<FormField, FormField>.() -> Boolean> =
             mutableListOf()
 
         fun takeSingle(block: FormField.(alreadyMatched: List<FormField>) -> Boolean) {
@@ -60,6 +169,17 @@ class SingleFieldMatcher(
             tieBreakersSingle.add(block)
         }
 
+        fun takePair(block: Pair<FormField, FormField>.(alreadyMatched: List<FormField>) -> Boolean) {
+            check(takeSingle == null && takePair == null) { "Every block can only have at most one take{Single,Pair} block" }
+            takePair = block
+        }
+
+        fun breakTieOnPair(block: Pair<FormField, FormField>.() -> Boolean) {
+            check(takePair != null) { "Every block needs a takePair block before a breakTieOnPair block" }
+            check(takeSingle == null) { "takeSingle cannot be mixed with breakTieOnPair" }
+            tieBreakersPair.add(block)
+        }
+
         fun build(): FieldMatcher {
             val takeSingle = takeSingle
             val takePair = takePair
@@ -70,13 +190,45 @@ class SingleFieldMatcher(
             }
         }
     }
+}
 
-    override fun apply(fields: List<FormField>, alreadyMatched: List<FormField>): List<FormField>? {
+@RequiresApi(Build.VERSION_CODES.O)
+class SingleFieldMatcher(
+    private val take: (FormField, List<FormField>) -> Boolean,
+    private val tieBreakers: List<(FormField) -> Boolean>
+) : FieldMatcher {
+
+    @AutofillDsl
+    class Builder {
+        private var takeSingle: (FormField.(List<FormField>) -> Boolean)? = null
+        private val tieBreakersSingle: MutableList<FormField.() -> Boolean> = mutableListOf()
+
+        fun takeSingle(block: FormField.(alreadyMatched: List<FormField>) -> Boolean) {
+            check(takeSingle == null) { "Every block can only have at most one takeSingle block" }
+            takeSingle = block
+        }
+
+        fun breakTieOnSingle(block: FormField.() -> Boolean) {
+            check(takeSingle != null) { "Every block needs a takeSingle block before a breakTieOnSingle block" }
+            tieBreakersSingle.add(block)
+        }
+
+        fun build() = SingleFieldMatcher(
+            takeSingle
+                ?: throw IllegalArgumentException("Every block needs a take{Single,Pair} block"),
+            tieBreakersSingle
+        )
+    }
+
+    override fun match(fields: List<FormField>, alreadyMatched: List<FormField>): List<FormField>? {
         fields.filter { take(it, alreadyMatched) }.let { contestants ->
             var current = contestants
             for (tieBreaker in tieBreakers) {
+                // Successively filter matched fields via tie breakers...
                 val new = current.filter { tieBreaker(it) }
+                // skipping those tie breakers that are not satisfied for any remaining field...
                 if (new.isEmpty()) continue
+                // and return if the available options have been narrowed to a single field.
                 if (new.size == 1) return listOf(new.single())
                 current = new
             }
@@ -85,15 +237,14 @@ class SingleFieldMatcher(
     }
 }
 
-
 @RequiresApi(Build.VERSION_CODES.O)
 class PairOfFieldsMatcher(
     private val take: (Pair<FormField, FormField>, List<FormField>) -> Boolean,
     private val tieBreakers: List<(Pair<FormField, FormField>) -> Boolean>
 ) : FieldMatcher {
 
-    override fun apply(fields: List<FormField>, alreadyMatched: List<FormField>): List<FormField>? {
-        fields.zipWithNext().filter { it.first precedes it.second }
+    override fun match(fields: List<FormField>, alreadyMatched: List<FormField>): List<FormField>? {
+        fields.zipWithNext().filter { it.first directlyPrecedes it.second }
             .filter { take(it, alreadyMatched) }.let { contestants ->
                 var current = contestants
                 for (tieBreaker in tieBreakers) {
@@ -107,59 +258,101 @@ class PairOfFieldsMatcher(
     }
 }
 
+
 @RequiresApi(Build.VERSION_CODES.O)
-class AutofillRule(
-    val type: AutofillScenarioType,
-    private val passwordMatcher: FieldMatcher,
-    private val usernameMatcher: SingleFieldMatcher?,
-    private val takePasswordFirst: Boolean,
-    val stopOnMatch: Boolean,
-    val requiresMultiOriginSupport: Boolean
+class AutofillRule private constructor(
+    private val matchers: List<AutofillRuleMatcher>, private val applyInSingleOriginMode: Boolean
 ) {
 
-    @AutofillDsl
-    class Builder(private val type: AutofillScenarioType) {
-        private var passwordMatcher: FieldMatcher? = null
-        private var usernameMatcher: SingleFieldMatcher? = null
-        private var takePasswordFirst = true
+    data class AutofillRuleMatcher(
+        val type: FillableFieldType, val matcher: FieldMatcher, val optional: Boolean
+    )
 
-        var stopOnMatch = false
-        var requiresMultiOriginSupport = true
-
-        fun password(block: FieldMatcher.Builder.() -> Unit) {
-            check(passwordMatcher == null) { "Every {fill,generate}Rule block can only have one password block" }
-            passwordMatcher = FieldMatcher.Builder().apply(block).build()
-        }
-
-        fun username(block: SingleFieldMatcher.Builder.() -> Unit) {
-            check(usernameMatcher == null) { "Every {fill,generate}Rule block can only have one username block" }
-            if (passwordMatcher == null) takePasswordFirst = false
-            usernameMatcher =
-                SingleFieldMatcher.Builder().apply(block).build() as SingleFieldMatcher
-        }
-
-        fun build() = AutofillRule(
-            type,
-            passwordMatcher
-                ?: throw IllegalArgumentException("Every {fill,generate}Rule block needs a password block"),
-            usernameMatcher,
-            takePasswordFirst,
-            stopOnMatch,
-            requiresMultiOriginSupport
-        )
+    enum class FillableFieldType {
+        Username, CurrentPassword, NewPassword, GenericPassword,
     }
 
-    fun apply(allPassword: List<FormField>, allUsername: List<FormField>): AutofillScenario? {
-        val password: List<FormField>
-        val username: FormField?
-        if (takePasswordFirst) {
-            password = passwordMatcher.apply(allPassword, emptyList()) ?: return null
-            username = usernameMatcher?.apply(allUsername, password)?.single()
-        } else {
-            username = usernameMatcher?.apply(allUsername, emptyList())?.single()
-            password = passwordMatcher.apply(allPassword, listOfNotNull(username)) ?: return null
+    @AutofillDsl
+    class Builder(private val applyInSingleOriginMode: Boolean) {
+        private val matchers = mutableListOf<AutofillRuleMatcher>()
+
+        fun username(optional: Boolean = false, block: SingleFieldMatcher.Builder.() -> Unit) {
+            require(matchers.none { it.type == FillableFieldType.Username }) { "Every rule block can only have at most one username block" }
+            matchers.add(
+                AutofillRuleMatcher(
+                    type = FillableFieldType.Username,
+                    matcher = SingleFieldMatcher.Builder().apply(block).build(),
+                    optional = optional
+                )
+            )
         }
-        return AutofillScenario(type, username, password)
+
+        fun currentPassword(optional: Boolean = false, block: FieldMatcher.Builder.() -> Unit) {
+            require(matchers.none { it.type == FillableFieldType.GenericPassword }) { "Every rule block can only have either genericPassword or {current,new}Password blocks" }
+            matchers.add(
+                AutofillRuleMatcher(
+                    type = FillableFieldType.CurrentPassword,
+                    matcher = FieldMatcher.Builder().apply(block).build(),
+                    optional = optional
+                )
+            )
+        }
+
+        fun newPassword(optional: Boolean = false, block: FieldMatcher.Builder.() -> Unit) {
+            require(matchers.none { it.type == FillableFieldType.GenericPassword }) { "Every rule block can only have either genericPassword or {current,new}Password blocks" }
+            matchers.add(
+                AutofillRuleMatcher(
+                    type = FillableFieldType.NewPassword,
+                    matcher = FieldMatcher.Builder().apply(block).build(),
+                    optional = optional
+                )
+            )
+        }
+
+        fun genericPassword(optional: Boolean = false, block: FieldMatcher.Builder.() -> Unit) {
+            require(matchers.none {
+                it.type in listOf(
+                    FillableFieldType.CurrentPassword, FillableFieldType.NewPassword
+                )
+            }) { "Every rule block can only have either genericPassword or {current,new}Password blocks" }
+            matchers.add(
+                AutofillRuleMatcher(
+                    type = FillableFieldType.GenericPassword,
+                    matcher = FieldMatcher.Builder().apply(block).build(),
+                    optional = optional
+                )
+            )
+        }
+
+        fun build() = AutofillRule(matchers, applyInSingleOriginMode)
+    }
+
+    fun apply(
+        allPassword: List<FormField>, allUsername: List<FormField>, singleOriginMode: Boolean
+    ): AutofillScenario? {
+        if (singleOriginMode && !applyInSingleOriginMode) return null
+        val scenarioBuilder = AutofillScenario.Builder()
+        val alreadyMatched = mutableListOf<FormField>()
+        for ((type, matcher, optional) in matchers) {
+            val matchResult = when (type) {
+                FillableFieldType.Username -> matcher.match(allUsername, alreadyMatched)
+                else -> matcher.match(allPassword, alreadyMatched)
+            } ?: if (optional) continue else return null
+            when (type) {
+                FillableFieldType.Username -> {
+                    check(matchResult.size == 1 && scenarioBuilder.username == null)
+                    scenarioBuilder.username = matchResult.single()
+                }
+                FillableFieldType.CurrentPassword -> scenarioBuilder.currentPassword.addAll(
+                    matchResult
+                )
+                FillableFieldType.NewPassword -> scenarioBuilder.newPassword.addAll(matchResult)
+                FillableFieldType.GenericPassword -> scenarioBuilder.genericPassword.addAll(
+                    matchResult
+                )
+            }
+        }
+        return null
     }
 }
 
@@ -170,35 +363,24 @@ class AutofillStrategy(private val rules: List<AutofillRule>) {
     class Builder {
         private val rules: MutableList<AutofillRule> = mutableListOf()
 
-        fun fillRule(block: AutofillRule.Builder.() -> Unit): AutofillRule =
-            AutofillRule.Builder(AutofillScenarioType.Fill).apply(block).build()
-
-        fun generateRule(block: AutofillRule.Builder.() -> Unit): AutofillRule =
-            AutofillRule.Builder(AutofillScenarioType.Generate).apply(block).build()
+        fun rule(
+            applyInSingleOriginMode: Boolean = false, block: AutofillRule.Builder.() -> Unit
+        ) = AutofillRule.Builder(applyInSingleOriginMode).apply(block).build()
 
         fun build() = AutofillStrategy(rules)
     }
 
-    fun apply(fields: List<FormField>, multiOriginSupport: Boolean): List<AutofillScenario> {
+    fun apply(fields: List<FormField>, multiOriginSupport: Boolean): AutofillScenario? {
         val possiblePasswordFields =
             fields.filter { it.passwordCertainty > CertaintyLevel.Possible }
         val possibleUsernameFields =
             fields.filter { it.usernameCertainty > CertaintyLevel.Possible }
-        var fillMatch: AutofillScenario? = null
-        var generateMatch: AutofillScenario? = null
-
-        loop@ for (rule in rules) {
-            if (!multiOriginSupport && rule.requiresMultiOriginSupport) continue@loop
-            if (rule.type == AutofillScenarioType.Fill) continue@loop
-            if (rule.type == AutofillScenarioType.Generate) continue@loop
-            val result = rule.apply(possiblePasswordFields, possibleUsernameFields) ?: continue@loop
-            when (result.type) {
-                AutofillScenarioType.Fill -> fillMatch = result
-                AutofillScenarioType.Generate -> generateMatch = result
-            }
-            if (rule.stopOnMatch) break@loop
+        // Return the result of the first rule that matches
+        for (rule in rules) {
+            return rule.apply(possiblePasswordFields, possibleUsernameFields, multiOriginSupport)
+                ?: continue
         }
-        return listOfNotNull(fillMatch, generateMatch)
+        return null
     }
 }
 
