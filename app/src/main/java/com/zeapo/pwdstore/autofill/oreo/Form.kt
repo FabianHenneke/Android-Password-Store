@@ -12,19 +12,16 @@ import android.service.autofill.FillCallback
 import android.service.autofill.FillResponse
 import android.service.autofill.SaveInfo
 import android.view.autofill.AutofillId
-import android.view.autofill.AutofillValue
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.e
 import com.zeapo.pwdstore.R
-import com.zeapo.pwdstore.autofill.oreo.CertaintyLevel.*
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillDecryptActivity
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillFilterView
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillPublisherChangedActivity
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillSaveActivity
 import java.io.File
-import kotlin.math.abs
 
 private val AUTOFILL_BROWSERS = listOf(
     "org.mozilla.focus", "org.mozilla.klar", "com.duckduckgo.mobile.android"
@@ -88,48 +85,29 @@ sealed class FormOrigin(open val identifier: String) {
 
 @RequiresApi(Build.VERSION_CODES.O)
 // FIXME: Use manual request?
-class Form(context: Context, structure: AssistStructure, private val isManualRequest: Boolean) {
+private class Form(
+    context: Context, structure: AssistStructure, private val isManualRequest: Boolean
+) {
 
     companion object {
-
-        const val BUNDLE_KEY_USERNAME_ID = "usernameId"
-        const val BUNDLE_KEY_PASSWORD_IDS = "passwordIds"
-
-        fun makeFillInDataset(
-            context: Context, credentials: Credentials, clientState: Bundle
-        ): Dataset {
-            val remoteView = makePlaceholderRemoteView(context)
-            return Dataset.Builder(remoteView).run {
-                val usernameId = clientState.getParcelable<AutofillId>(BUNDLE_KEY_USERNAME_ID)
-                if (usernameId != null && credentials.username != null) setValue(
-                    usernameId, AutofillValue.forText(credentials.username)
-                )
-                val passwordIds =
-                    clientState.getParcelableArrayList<AutofillId>(BUNDLE_KEY_PASSWORD_IDS)
-                if (passwordIds != null) {
-                    for (passwordId in passwordIds) {
-                        setValue(passwordId, AutofillValue.forText(credentials.password))
-                    }
-                }
-                build()
-            }
-        }
-
         private val SUPPORTED_SCHEMES = listOf("http", "https")
     }
 
-    private val fillableFields = mutableListOf<FormField>()
-    private val ignoredIds = mutableListOf<AutofillId>()
+    private val relevantFields = mutableListOf<FormField>()
+    val ignoredIds = mutableListOf<AutofillId>()
     private var fieldIndex = 0
 
     private var appPackage = structure.activityComponent.packageName
+
     // FIXME
     //    private val isBrowser = isTrustedBrowser(context, packageName)
     private val isBrowser = appPackage in ALL_BROWSERS
+
     // FIXME
     //    private val isBrowserSupportingSave = isBrowser && isBrowserWithSaveSupport(packageName)
     private val isBrowserSupportingSave = isBrowser
-    private val isBrowserSupportingMultiOrigin = isBrowser && isBrowserWithMultiOriginSupport(appPackage)
+    private val isBrowserSupportingMultiOrigin =
+        isBrowser && isBrowserWithMultiOriginSupport(appPackage)
     private val singleOriginMode = isBrowser && !isBrowserSupportingMultiOrigin
 
     private val webOrigins = mutableListOf<String>()
@@ -139,53 +117,40 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         parseStructure(structure)
     }
 
-    private val scenario = detectFieldsToFill()
+    val scenario = detectFieldsToFill()
 
     init {
         d { "Username field: ${scenario?.username}" }
+        d { "Will fill username: ${scenario?.fillUsername}" }
         d { "Generic password field(s): ${(scenario as? GenericAutofillScenario)?.genericPassword}" }
-        d { "Current password field(s): ${(scenario as? PreciseAutofillScenario)?.currentPassword}" }
-        d { "New password field(s): ${(scenario as? PreciseAutofillScenario)?.newPassword}" }
+        d { "Current password field(s): ${(scenario as? ClassifiedAutofillScenario)?.currentPassword}" }
+        d { "New password field(s): ${(scenario as? ClassifiedAutofillScenario)?.newPassword}" }
     }
 
-    private val formOrigin = determineFormOrigin()
+    val formOrigin = determineFormOrigin()
 
     init {
         d { "Origin: $formOrigin" }
     }
 
-    val canBeFilled = scenario != null && formOrigin != null
-    // FIXME
-    val canBeSaved = formOrigin != null && (!isBrowser || isBrowserSupportingSave)
+    val originSupportsSave = formOrigin != null && (!isBrowser || isBrowserSupportingSave)
 
-    private val clientState by lazy {
-        check(scenario != null)
-        scenario.toAutofillScenarioIds().toClientState()
-    }
-
-    private fun parseStructure(structure: AssistStructure) {
-        for (i in 0 until structure.windowNodeCount) {
-            parseViewNode(structure.getWindowNodeAt(i).rootViewNode)
-        }
-    }
-
-    private fun parseViewNode(node: AssistStructure.ViewNode) {
+    private fun parseStructure(structure: AssistStructure) = visitViewNodes(structure) { node ->
         trackOrigin(node)
         val field = FormField(node, fieldIndex)
         // FIXME: Improve origin detection by considering iframes and restricting to the list returned by adb shell settings get global autofill_compat_mode_allowed_packages
-        if (field.isFillable) {
+        // FIXME: WebView?
+        if (field.isFillable || field.isSaveable) {
             d { "$field" }
-            fillableFields.add(field)
+            relevantFields.add(field)
             fieldIndex++
         } else {
-            d { "Found non-fillable field: $field" }
+            d { "Found irrelevant field: $field" }
             ignoredIds.add(field.autofillId)
         }
-
-        for (i in 0 until node.childCount) {
-            parseViewNode(node.getChildAt(i))
-        }
     }
+
+    private fun detectFieldsToFill() = autofillStrategy.apply(relevantFields, singleOriginMode)
 
     private fun trackOrigin(node: AssistStructure.ViewNode) {
         if (!isBrowser) return
@@ -197,147 +162,123 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         }
     }
 
-    private fun isSingleFieldOrAdjacentPair(fields: List<FormField>): Boolean {
-        if (fields.size == 1) return true
-
-        if (fields.size != 2) return false
-        val id0 = fillableFields.indexOf(fields[0])
-        val id1 = fillableFields.indexOf(fields[1])
-        return abs(id0 - id1) == 1
-    }
-
-    private fun isFocusedOrFollowsFocusedUsernameField(field: FormField): Boolean {
-        if (field.isFocused) return true
-
-        val ownIndex = fillableFields.indexOf(field)
-        if (ownIndex == 0) return false
-        val potentialUsernameField = fillableFields[ownIndex - 1]
-        if (!potentialUsernameField.isFocused || potentialUsernameField.usernameCertainty < Likely) return false
-        return true
-    }
-
-    private fun identifyPasswordFields(): List<FormField> {
-        val possiblePasswordFields = fillableFields.filter { it.passwordCertainty >= Possible }
-        if (possiblePasswordFields.isEmpty()) return emptyList()
-        val certainPasswordFields = fillableFields.filter { it.passwordCertainty >= Certain }
-        if (isSingleFieldOrAdjacentPair(certainPasswordFields)) return certainPasswordFields
-        if (certainPasswordFields.count { isFocusedOrFollowsFocusedUsernameField(it) } == 1) return certainPasswordFields.filter {
-            isFocusedOrFollowsFocusedUsernameField(
-                it
-            )
-        }
-        val likelyPasswordFields = fillableFields.filter { it.passwordCertainty >= Likely }
-        if (isSingleFieldOrAdjacentPair(likelyPasswordFields)) return likelyPasswordFields
-        if (likelyPasswordFields.count { isFocusedOrFollowsFocusedUsernameField(it) } == 1) return likelyPasswordFields.filter {
-            isFocusedOrFollowsFocusedUsernameField(
-                it
-            )
-        }
-        if (isSingleFieldOrAdjacentPair(possiblePasswordFields)) return possiblePasswordFields
-        return emptyList()
-    }
-
-    private fun takeFieldRightBeforePasswordFields(
-        fields: List<FormField>, alwaysTakeSingleField: Boolean = false
-    ): FormField? {
-        if (fields.isEmpty()) return null
-        if (fields.size == 1 && alwaysTakeSingleField) return fields.single()
-        if (passwordFields.isEmpty()) return null
-        val firstPasswordIndex = fillableFields.indexOf(passwordFields.first())
-        val potentialUsernameIndex = firstPasswordIndex - 1
-        if (potentialUsernameIndex < 0) return null
-        val potentialUsernameField = fillableFields[potentialUsernameIndex]
-        return potentialUsernameField.takeIf { it in fields }
-    }
-
-    private fun identifyUsernameField(): FormField? {
-        val possibleUsernameFields = fillableFields.filter { it.usernameCertainty >= Possible }
-        if (possibleUsernameFields.isEmpty()) return null
-        val certainUsernameFields = fillableFields.filter { it.usernameCertainty >= Certain }
-        var result =
-            takeFieldRightBeforePasswordFields(certainUsernameFields, alwaysTakeSingleField = true)
-        if (result != null) return result
-        val likelyUsernameFields = fillableFields.filter { it.usernameCertainty >= Likely }
-        result = takeFieldRightBeforePasswordFields(likelyUsernameFields)
-        if (result != null) return result
-        return takeFieldRightBeforePasswordFields(possibleUsernameFields)
-    }
-
     private fun webOriginToFormOrigin(origin: String): FormOrigin? {
         val uri = Uri.parse(origin) ?: return null
         val scheme = uri.scheme ?: return null
         if (scheme !in SUPPORTED_SCHEMES) return null
         val host = uri.host ?: return null
-        val canonicalDomain = getCanonicalDomain(host) ?: return null
-        return FormOrigin.Web(canonicalDomain)
+        return FormOrigin.Web(getCanonicalDomain(host))
     }
 
     private fun determineFormOrigin(): FormOrigin? {
+        if (scenario == null) return null
         return if (!isBrowser || webOrigins.isEmpty()) {
+            // Security assumption: If a trusted browser includes no web origin in the provided
+            // AssistStructure, then the form is a native browser form (e.g. for a sync password).
             FormOrigin.App(appPackage)
-        } else if (webOrigins.size == 1) {
-            // FIXME
-            // Security assumption on trusted browsers:
-            // Every origin that contributes fillable fields to a web page appears at least once as
-            // the webDomain of some ViewNode (but not necessarily one that represents a fillable
-            // field).
-            // It is thus safe to fill into any fillable field if there is only a single origin.
-            webOriginToFormOrigin(webOrigins.single())
+        } else if (!isBrowserSupportingMultiOrigin) {
+            // Security assumption: If a browser is trusted but does not support tracking multiple
+            // origins, it is expected to annotate a single field, in most cases its URL bar, with a
+            // webOrigin. We err on the side of caution and only trust the reported web origin if it
+            // is a single one.
+            webOriginToFormOrigin(webOrigins.singleOrNull() ?: return null)
         } else {
-            // Based on our assumption above, if there are nodes from multiple origins on a page,
-            // we can only safely fill if the fields to fill are all explicitly labeled with the
-            // same origin.
-            val fieldsToFill = passwordFields.toMutableList()
-            usernameField?.let { fieldsToFill.add(it) }
-            val originsAmongFieldsToFill = fieldsToFill.map { it.webOrigin }.toSet()
-            if (originsAmongFieldsToFill.size != 1) return null
-            val originToFill = originsAmongFieldsToFill.single() ?: return null
-            webOriginToFormOrigin(originToFill)
+            // For browsers with support for multiple origins, we take the single origin among the
+            // detected fillable or saveable fields. If this origin is null, but we encountered web
+            // origins elsewhere in the AssistStructure, the situation is uncertain and Autofill
+            // should not be offered.
+            webOriginToFormOrigin(scenario.allFields.map { it.webOrigin }.singleOrNull() ?: return null)
         }
     }
 
+
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+class FillableForm private constructor(
+    private val formOrigin: FormOrigin,
+    private val scenario: AutofillScenario<FormField>,
+    private val ignoredIds: List<AutofillId>,
+    private val originSupportsSave: Boolean
+) {
+    companion object {
+        fun makeFillInDataset(
+            context: Context, credentials: Credentials, clientState: Bundle, action: AutofillAction
+        ): Dataset {
+            val remoteView = makePlaceholderRemoteView(context)
+            val scenario = AutofillScenario.fromClientState(clientState)
+            return Dataset.Builder(remoteView).run {
+                fillWith(scenario, action, credentials)
+                build()
+            }
+        }
+
+        fun parseAssistStructure(
+            context: Context, structure: AssistStructure, isManualRequest: Boolean
+        ): FillableForm? {
+            val form = Form(context, structure, isManualRequest)
+            if (form.formOrigin == null || form.scenario == null) return null
+            return FillableForm(form.formOrigin, form.scenario, form.ignoredIds, form.originSupportsSave)
+        }
+    }
+
+    private val clientState = scenario.toClientState()
+
+    // We do not offer save when the only relevant field is a username field or there is no field.
+    private val scenarioSupportsSave = scenario.fieldsToSave.minus(listOfNotNull(scenario.username)).isNotEmpty()
+    private val canBeSaved = originSupportsSave && scenarioSupportsSave
+
     private fun makePlaceholderDataset(
-        remoteView: RemoteViews, intentSender: IntentSender
+        remoteView: RemoteViews, intentSender: IntentSender, action: AutofillAction
     ): Dataset {
         return Dataset.Builder(remoteView).run {
-            usernameField?.fillWith(this, "PLACEHOLDER")
-            for (passwordField in passwordFields) {
-                passwordField.fillWith(this, "PLACEHOLDER")
-            }
+            fillWith(scenario, action, credentials = null)
             setAuthentication(intentSender)
             build()
         }
     }
 
-    private fun makeFillMatchDataset(context: Context, file: File): Dataset {
-        check(formOrigin != null)
+    private fun makeMatchDataset(context: Context, file: File): Dataset? {
+        if (scenario.fieldsToFillOn(AutofillAction.Match).isEmpty()) return null
         val remoteView = makeFillMatchRemoteView(context, file, formOrigin)
         val intentSender = AutofillDecryptActivity.makeDecryptFileIntentSender(file, context)
-        return makePlaceholderDataset(remoteView, intentSender)
+        return makePlaceholderDataset(
+            remoteView, intentSender, AutofillAction.Match
+        )
     }
 
-    private fun makeSearchAndFillDataset(context: Context): Dataset {
-        check(formOrigin != null)
+    private fun makeSearchDataset(context: Context): Dataset? {
+        if (scenario.fieldsToFillOn(AutofillAction.Search).isEmpty()) return null
         val remoteView = makeSearchAndFillRemoteView(context, formOrigin)
         val intentSender =
             AutofillFilterView.makeMatchAndDecryptFileIntentSender(context, formOrigin)
-        return makePlaceholderDataset(remoteView, intentSender)
+        return makePlaceholderDataset(
+            remoteView, intentSender, AutofillAction.Search
+        )
     }
 
-    private fun makeGenerateAndFillDataset(context: Context): Dataset {
-        check(formOrigin != null)
+    private fun makeGenerateDataset(context: Context): Dataset? {
+        if (scenario.fieldsToFillOn(AutofillAction.Generate).isEmpty()) return null
         val remoteView = makeGenerateAndFillRemoteView(context, formOrigin)
         val intentSender = AutofillSaveActivity.makeSaveIntentSender(context, null, formOrigin)
-        return makePlaceholderDataset(remoteView, intentSender)
+        return makePlaceholderDataset(
+            remoteView, intentSender, AutofillAction.Generate
+        )
     }
 
-    private fun makePublisherChangedDataset(context: Context, publisherChangedException: AutofillPublisherChangedException): Dataset {
+    private fun makePublisherChangedDataset(
+        context: Context, publisherChangedException: AutofillPublisherChangedException
+    ): Dataset {
         val remoteView = makeWarningRemoteView(context)
-        val intentSender  = AutofillPublisherChangedActivity.makePublisherChangedIntentSender(context, publisherChangedException)
+        val intentSender = AutofillPublisherChangedActivity.makePublisherChangedIntentSender(
+            context, publisherChangedException
+        )
         return makePlaceholderDataset(remoteView, intentSender)
     }
 
-    private fun makePublisherChangedResponse(context: Context, publisherChangedException: AutofillPublisherChangedException): FillResponse {
+    private fun makePublisherChangedResponse(
+        context: Context, publisherChangedException: AutofillPublisherChangedException
+    ): FillResponse {
         return FillResponse.Builder().run {
             addDataset(makePublisherChangedDataset(context, publisherChangedException))
             setIgnoredIds(*ignoredIds.toTypedArray())
@@ -345,34 +286,40 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
         }
     }
 
+    // TODO: Support multi-step authentication flows in apps via FLAG_DELAY_SAVE
+    // See: https://developer.android.com/reference/android/service/autofill/SaveInfo#FLAG_DELAY_SAVE
     private fun makeSaveInfo(): SaveInfo? {
-        // TODO: Support multi-step authentication flows
-        if (passwordFields.isEmpty()) return null
-
-        val idsToSave = passwordFields.map { it.autofillId }.toMutableList()
+        if (!canBeSaved) return null
+        val idsToSave = scenario.fieldsToSave.map { it.autofillId }.toTypedArray()
+        if (idsToSave.isEmpty()) return null
         var saveDataTypes = SaveInfo.SAVE_DATA_TYPE_PASSWORD
-
-        usernameField?.let {
+        // FIXME: Can we always save the username? It may mean moving a file...
+        if (scenario.username != null) {
             saveDataTypes = saveDataTypes or SaveInfo.SAVE_DATA_TYPE_USERNAME
-            idsToSave.add(it.autofillId)
         }
-
-        return SaveInfo.Builder(saveDataTypes, idsToSave.toTypedArray()).run {
-            // FIXME
-            if (isBrowser) setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE)
-            build()
-        }
+        return SaveInfo.Builder(saveDataTypes, idsToSave).build()
     }
 
-    private fun detectFieldsToFill() = autofillStrategy.apply(fillableFields, singleOriginMode)
 
-    fun makeFillResponse(context: Context): FillResponse? {
-        if (scenario == null) return null
+    private fun makeFillResponse(context: Context, matchedFiles: List<File>): FillResponse? {
+        var hasDataset = false
         return FillResponse.Builder().run {
-            when (scenario) {
-                is PreciseAutofillScenario -> TODO()
-                is GenericAutofillScenario -> TODO()
+            for (file in matchedFiles) {
+                makeMatchDataset(context, file)?.let {
+                    hasDataset = true
+                    addDataset(it)
+                }
             }
+            makeSearchDataset(context)?.let {
+                hasDataset = true
+                addDataset(it)
+            }
+            makeGenerateDataset(context)?.let {
+                hasDataset = true
+                addDataset(it)
+            }
+            if (!hasDataset) return null
+            makeSaveInfo()?.let { setSaveInfo(it) }
             setClientState(clientState)
             setIgnoredIds(*ignoredIds.toTypedArray())
             build()
@@ -380,63 +327,13 @@ class Form(context: Context, structure: AssistStructure, private val isManualReq
     }
 
     fun fillCredentials(context: Context, callback: FillCallback) {
-        check(canBeFilled)
         val matchedFiles = try {
-            AutofillMatcher.getMatchesFor(context, formOrigin!!)
+            AutofillMatcher.getMatchesFor(context, formOrigin)
         } catch (publisherChangedException: AutofillPublisherChangedException) {
             e(publisherChangedException)
             callback.onSuccess(makePublisherChangedResponse(context, publisherChangedException))
             return
         }
-        val fillResponse = FillResponse.Builder().run {
-            if (passwordFields.size == 1 || isManualRequest) {
-                for (file in matchedFiles) addDataset(makeFillMatchDataset(context, file))
-                addDataset(makeSearchAndFillDataset(context))
-            }
-            if (passwordFields.size == 2 || isManualRequest) {
-                addDataset(makeGenerateAndFillDataset(context))
-            }
-            setClientState(clientState)
-            setIgnoredIds(*ignoredIds.toTypedArray())
-            val saveInfo = makeSaveInfo()
-            if (saveInfo != null) setSaveInfo(saveInfo)
-            build()
-        }
-        callback.onSuccess(fillResponse)
-    }
-
-    fun saveCredentials(context: Context, callback: FixedSaveCallback) {
-        check(canBeSaved)
-        val usernameValue = usernameField?.autofillValue
-        val username = if (usernameValue?.isText == true) usernameValue.textValue else null
-        val passwordValue = passwordFields.first().autofillValue
-        if (passwordValue == null) {
-            callback.onFailure(context.getString(R.string.oreo_autofill_save_invalid_password))
-            return
-        }
-        val password = if (passwordValue.isText) {
-            passwordValue.textValue
-        } else {
-            callback.onFailure(context.getString(R.string.oreo_autofill_save_invalid_password))
-            return
-        }
-        // Do not store masked passwords
-        if (password.all { it == '*' || it == '•' }) {
-            callback.onFailure(context.getString(R.string.oreo_autofill_save_invalid_password))
-            return
-        }
-        val credentials = Credentials(username?.toString(), password.toString())
-        callback.onSuccess(
-            AutofillSaveActivity.makeSaveIntentSender(
-                context, credentials, formOrigin!!
-            )
-        )
+        callback.onSuccess(makeFillResponse(context, matchedFiles))
     }
 }
-
-val AssistStructure.ViewNode.webOrigin: String?
-    @RequiresApi(Build.VERSION_CODES.O) get() = webDomain?.let { domain ->
-        val scheme = (if (Build.VERSION.SDK_INT >= 28) webScheme else null) ?: "http"
-        "$scheme://$domain"
-    }
-

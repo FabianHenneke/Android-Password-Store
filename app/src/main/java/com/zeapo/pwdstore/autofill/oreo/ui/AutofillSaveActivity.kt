@@ -13,10 +13,7 @@ import androidx.core.os.bundleOf
 import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.e
 import com.zeapo.pwdstore.PasswordStore
-import com.zeapo.pwdstore.autofill.oreo.AutofillMatcher
-import com.zeapo.pwdstore.autofill.oreo.Credentials
-import com.zeapo.pwdstore.autofill.oreo.Form
-import com.zeapo.pwdstore.autofill.oreo.FormOrigin
+import com.zeapo.pwdstore.autofill.oreo.*
 import com.zeapo.pwdstore.crypto.PgpActivity
 import com.zeapo.pwdstore.utils.PasswordRepository
 import java.io.File
@@ -122,7 +119,7 @@ class AutofillSaveActivity : Activity() {
                         return
                     }
                 val credentials = Credentials(username, password)
-                val fillInDataset = Form.makeFillInDataset(this, credentials, clientState)
+                val fillInDataset = FillableForm.makeFillInDataset(this, credentials, clientState, AutofillAction.Generate)
                 setResult(RESULT_OK, Intent().apply {
                     putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, fillInDataset)
                 })

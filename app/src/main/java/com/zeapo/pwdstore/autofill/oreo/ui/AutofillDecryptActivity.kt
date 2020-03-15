@@ -10,10 +10,12 @@ import android.os.Bundle
 import android.view.autofill.AutofillManager
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.e
 import com.zeapo.pwdstore.PasswordEntry
+import com.zeapo.pwdstore.autofill.oreo.AutofillAction
 import com.zeapo.pwdstore.autofill.oreo.Credentials
-import com.zeapo.pwdstore.autofill.oreo.Form
+import com.zeapo.pwdstore.autofill.oreo.FillableForm
 import kotlinx.coroutines.*
 import me.msfjarvis.openpgpktx.util.OpenPgpApi
 import me.msfjarvis.openpgpktx.util.OpenPgpServiceConnection
@@ -30,6 +32,7 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
 
     companion object {
         private const val EXTRA_FILE_PATH = "com.zeapo.pwdstore.autofill.oreo.EXTRA_FILE_PATH"
+        private const val EXTRA_SEARCH_ACTION = "com.zeapo.pwdstore.autofill.oreo.EXTRA_SEARCH_ACTION"
         private const val REQUEST_CODE_CONTINUE_AFTER_USER_INTERACTION = 1
         private const val OPENPGP_PROVIDER = "org.sufficientlysecure.keychain"
 
@@ -38,12 +41,14 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
         fun makeDecryptFileIntent(file: File, forwardedExtras: Bundle, context: Context): Intent {
             return Intent(context, AutofillDecryptActivity::class.java).apply {
                 putExtras(forwardedExtras)
+                putExtra(EXTRA_SEARCH_ACTION, true)
                 putExtra(EXTRA_FILE_PATH, file.absolutePath)
             }
         }
 
         fun makeDecryptFileIntentSender(file: File, context: Context): IntentSender {
             val intent = Intent(context, AutofillDecryptActivity::class.java).apply {
+                putExtra(EXTRA_SEARCH_ACTION, false)
                 putExtra(EXTRA_FILE_PATH, file.absolutePath)
             }
             return PendingIntent.getActivity(
@@ -72,13 +77,16 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
             finish()
             return
         }
+        val isSearchAction = intent?.getBooleanExtra(EXTRA_SEARCH_ACTION, true)!!
+        val action = if (isSearchAction) AutofillAction.Search else AutofillAction.Match
+        d { action.toString() }
         launch {
             val credentials = decryptUsernameAndPassword(File(filePath))
             if (credentials == null) {
                 setResult(RESULT_CANCELED)
             } else {
                 val fillInDataset =
-                    Form.makeFillInDataset(this@AutofillDecryptActivity, credentials, clientState)
+                    FillableForm.makeFillInDataset(this@AutofillDecryptActivity, credentials, clientState, action)
                 withContext(Dispatchers.Main) {
                     setResult(RESULT_OK, Intent().apply {
                         putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, fillInDataset)

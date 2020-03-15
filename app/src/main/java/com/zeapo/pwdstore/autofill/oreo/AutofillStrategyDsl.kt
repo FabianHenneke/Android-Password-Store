@@ -1,149 +1,235 @@
 package com.zeapo.pwdstore.autofill.oreo
 
+import android.app.assist.AssistStructure
 import android.os.Build
 import android.os.Bundle
+import android.service.autofill.Dataset
 import android.view.autofill.AutofillId
+import android.view.autofill.AutofillValue
 import androidx.annotation.RequiresApi
+import com.github.ajalt.timberkt.d
 
 @DslMarker
 annotation class AutofillDsl
 
-@RequiresApi(Build.VERSION_CODES.O)
-sealed class AutofillScenario {
-    abstract val username: FormField?
-
-    class Builder {
-        var username: FormField? = null
-        val currentPassword = mutableListOf<FormField>()
-        val newPassword = mutableListOf<FormField>()
-        val genericPassword = mutableListOf<FormField>()
-
-        fun build(): AutofillScenario {
-            require(genericPassword.isEmpty() || (currentPassword.isEmpty() || newPassword.isEmpty()))
-            return if (currentPassword.isNotEmpty() || newPassword.isNotEmpty()) PreciseAutofillScenario(
-                username = username, currentPassword = currentPassword, newPassword = newPassword
-            )
-            else GenericAutofillScenario(
-                username = username, genericPassword = genericPassword
-            )
-        }
-    }
-
-    fun toAutofillScenarioIds(): AutofillScenarioIds {
-        val builder = AutofillScenarioIds.Builder()
-        builder.username = username?.autofillId
-        when (this) {
-            is PreciseAutofillScenario -> {
-                builder.currentPassword.addAll(currentPassword.map { it.autofillId })
-                builder.newPassword.addAll(newPassword.map { it.autofillId })
-            }
-            is GenericAutofillScenario -> {
-                builder.genericPassword.addAll(genericPassword.map { it.autofillId })
-            }
-        }
-        return builder.build()
-    }
-
-    val allFields: List<FormField> by lazy {
-        listOfNotNull(username).toMutableList().apply {
-            when (this@AutofillScenario) {
-                is PreciseAutofillScenario -> {
-                    addAll(currentPassword)
-                    addAll(newPassword)
-                }
-                is GenericAutofillScenario -> {
-                    addAll(genericPassword)
-                }
-            }
-        }
-    }
+enum class AutofillAction {
+    Match, Search, Generate
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-data class PreciseAutofillScenario(
-    override val username: FormField?,
-    val currentPassword: List<FormField>,
-    val newPassword: List<FormField>
-) : AutofillScenario()
+sealed class AutofillScenario<out T>() {
+    abstract val username: T?
+    abstract val fillUsername: Boolean
 
-@RequiresApi(Build.VERSION_CODES.O)
-data class GenericAutofillScenario(
-    override val username: FormField?, val genericPassword: List<FormField>
-) : AutofillScenario()
-
-@RequiresApi(Build.VERSION_CODES.O)
-sealed class AutofillScenarioIds {
     companion object {
-        private const val BUNDLE_KEY_USERNAME_ID = "usernameId"
-        private const val BUNDLE_KEY_CURRENT_PASSWORD_IDS = "currentPasswordIds"
-        private const val BUNDLE_KEY_NEW_PASSWORD_IDS = "newPasswordIds"
-        private const val BUNDLE_KEY_GENERIC_PASSWORD_IDS = "genericPasswordIds"
+        const val BUNDLE_KEY_USERNAME_ID = "usernameId"
+        const val BUNDLE_KEY_FILL_USERNAME = "fillUsername"
+        const val BUNDLE_KEY_CURRENT_PASSWORD_IDS = "currentPasswordIds"
+        const val BUNDLE_KEY_NEW_PASSWORD_IDS = "newPasswordIds"
+        const val BUNDLE_KEY_GENERIC_PASSWORD_IDS = "genericPasswordIds"
 
-        fun fromClientState(clientState: Bundle): AutofillScenarioIds {
-            return Builder().apply {
+        fun fromClientState(clientState: Bundle): AutofillScenario<AutofillId> {
+            return Builder<AutofillId>().apply {
                 username = clientState.getParcelable(BUNDLE_KEY_USERNAME_ID)
-                currentPassword.addAll(clientState.getParcelableArrayList(
-                    BUNDLE_KEY_CURRENT_PASSWORD_IDS) ?: emptyList())
-                newPassword.addAll(clientState.getParcelableArrayList(
-                    BUNDLE_KEY_NEW_PASSWORD_IDS) ?: emptyList())
-                genericPassword.addAll(clientState.getParcelableArrayList(
-                    BUNDLE_KEY_GENERIC_PASSWORD_IDS) ?: emptyList())
+                fillUsername = clientState.getBoolean(BUNDLE_KEY_FILL_USERNAME)
+                currentPassword.addAll(
+                    clientState.getParcelableArrayList(
+                        BUNDLE_KEY_CURRENT_PASSWORD_IDS
+                    ) ?: emptyList()
+                )
+                newPassword.addAll(
+                    clientState.getParcelableArrayList(
+                        BUNDLE_KEY_NEW_PASSWORD_IDS
+                    ) ?: emptyList()
+                )
+                genericPassword.addAll(
+                    clientState.getParcelableArrayList(
+                        BUNDLE_KEY_GENERIC_PASSWORD_IDS
+                    ) ?: emptyList()
+                )
             }.build()
         }
     }
 
-    abstract val username: AutofillId?
+    class Builder<T> {
+        var username: T? = null
+        var fillUsername = false
+        val currentPassword = mutableListOf<T>()
+        val newPassword = mutableListOf<T>()
+        val genericPassword = mutableListOf<T>()
 
-    class Builder {
-        var username: AutofillId? = null
-        val currentPassword = mutableListOf<AutofillId>()
-        val newPassword = mutableListOf<AutofillId>()
-        val genericPassword = mutableListOf<AutofillId>()
-
-        fun build(): AutofillScenarioIds {
+        fun build(): AutofillScenario<T> {
             require(genericPassword.isEmpty() || (currentPassword.isEmpty() || newPassword.isEmpty()))
             return if (currentPassword.isNotEmpty() || newPassword.isNotEmpty()) {
-                PreciseAutofillScenarioIds(
+                ClassifiedAutofillScenario(
                     username = username,
-                    currentPassword = ArrayList(currentPassword),
-                    newPassword = ArrayList(newPassword)
+                    fillUsername = fillUsername,
+                    currentPassword = currentPassword,
+                    newPassword = newPassword
                 )
             } else {
-                GenericAutofillScenarioIds(username = username, genericPassword = ArrayList(genericPassword))
+                GenericAutofillScenario(
+                    username = username,
+                    fillUsername = fillUsername,
+                    genericPassword = genericPassword
+                )
             }
         }
     }
 
-    fun toClientState(): Bundle {
-        return when (this) {
-            is PreciseAutofillScenarioIds ->  {
-                Bundle(3).apply {
-                    putParcelable(BUNDLE_KEY_USERNAME_ID, username)
-                    putParcelableArrayList(BUNDLE_KEY_CURRENT_PASSWORD_IDS, currentPassword)
-                    putParcelableArrayList(BUNDLE_KEY_NEW_PASSWORD_IDS, newPassword)
-                }
+    val allFields: List<T> by lazy {
+        listOfNotNull(username) + when (this) {
+            is ClassifiedAutofillScenario -> currentPassword + newPassword
+            is GenericAutofillScenario -> genericPassword
+        }
+    }
+
+    fun fieldsToFillOn(action: AutofillAction): List<T> = when (action) {
+        AutofillAction.Match -> fieldsToFillOnMatch
+        AutofillAction.Search -> fieldsToFillOnSearch
+        AutofillAction.Generate -> fieldsToFillOnGenerate
+    }
+
+    private val fieldsToFillOnMatch: List<T> by lazy {
+        listOfNotNull(username.takeIf { fillUsername }) + when (this) {
+            is ClassifiedAutofillScenario -> currentPassword
+            is GenericAutofillScenario -> {
+                if (genericPassword.size == 1) genericPassword
+                else emptyList()
             }
-            is GenericAutofillScenarioIds -> {
-                Bundle(2).apply {
-                    putParcelable(BUNDLE_KEY_USERNAME_ID, username)
-                    putParcelableArrayList(BUNDLE_KEY_GENERIC_PASSWORD_IDS, genericPassword)
-                }
+        }
+    }
+
+    private val fieldsToFillOnSearch: List<T> by lazy {
+        listOfNotNull(username.takeIf { fillUsername }) + when (this) {
+            is ClassifiedAutofillScenario -> currentPassword
+            is GenericAutofillScenario -> {
+                if (genericPassword.size == 1) genericPassword
+                else emptyList()
             }
+        }
+    }
+
+    private val fieldsToFillOnGenerate: List<T> by lazy {
+        listOfNotNull(username.takeIf { fillUsername }) + when (this) {
+            is ClassifiedAutofillScenario -> newPassword
+            is GenericAutofillScenario -> genericPassword
+        }
+    }
+
+    val fieldsToSave: List<T> by lazy {
+        listOfNotNull(username) + when (this) {
+            is ClassifiedAutofillScenario -> {
+                // Save only the new password if there are both new and current passwords
+                if (newPassword.isNotEmpty()) newPassword else currentPassword
+            }
+            is GenericAutofillScenario -> genericPassword
         }
     }
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-data class PreciseAutofillScenarioIds(
-    override val username: AutofillId?,
-    val currentPassword: ArrayList<AutofillId>,
-    val newPassword: ArrayList<AutofillId>
-) : AutofillScenarioIds()
+@JvmName("fillWithAutofillId")
+fun Dataset.Builder.fillWith(
+    scenario: AutofillScenario<AutofillId>, action: AutofillAction, credentials: Credentials?
+) {
+    val credentialsToFill = credentials ?: Credentials("USERNAME", "PASSWORD")
+    for (field in scenario.fieldsToFillOn(action)) {
+        val value = if (field == scenario.username) {
+            credentialsToFill.username
+        } else {
+            credentialsToFill.password
+        } ?: continue
+        setValue(field, AutofillValue.forText(value))
+    }
+}
 
 @RequiresApi(Build.VERSION_CODES.O)
-data class GenericAutofillScenarioIds(
-    override val username: AutofillId?, val genericPassword: ArrayList<AutofillId>
-) : AutofillScenarioIds()
+@JvmName("fillWithFormField")
+fun Dataset.Builder.fillWith(
+    scenario: AutofillScenario<FormField>, action: AutofillAction, credentials: Credentials?
+) {
+    fillWith(scenario.map { it.autofillId }, action, credentials)
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+data class ClassifiedAutofillScenario<T>(
+    override val username: T?,
+    override val fillUsername: Boolean,
+    val currentPassword: List<T>,
+    val newPassword: List<T>
+) : AutofillScenario<T>()
+
+@RequiresApi(Build.VERSION_CODES.O)
+data class GenericAutofillScenario<T>(
+    override val username: T?, override val fillUsername: Boolean, val genericPassword: List<T>
+) : AutofillScenario<T>()
+
+inline fun <T, S> AutofillScenario<T>.map(transform: (T) -> S): AutofillScenario<S> {
+    val builder = AutofillScenario.Builder<S>()
+    builder.username = username?.let(transform)
+    builder.fillUsername = fillUsername
+    when (this) {
+        is ClassifiedAutofillScenario -> {
+            builder.currentPassword.addAll(currentPassword.map(transform))
+            builder.newPassword.addAll(newPassword.map(transform))
+        }
+        is GenericAutofillScenario -> {
+            builder.genericPassword.addAll(genericPassword.map(transform))
+        }
+    }
+    return builder.build()
+}
+
+
+@RequiresApi(Build.VERSION_CODES.O)
+@JvmName("toClientStateAutofillId")
+private fun AutofillScenario<AutofillId>.toClientState(): Bundle = when (this) {
+    is ClassifiedAutofillScenario<AutofillId> -> {
+        Bundle(4).apply {
+            putParcelable(AutofillScenario.BUNDLE_KEY_USERNAME_ID, username)
+            putBoolean(AutofillScenario.BUNDLE_KEY_FILL_USERNAME, fillUsername)
+            putParcelableArrayList(
+                AutofillScenario.BUNDLE_KEY_CURRENT_PASSWORD_IDS, ArrayList(currentPassword)
+            )
+            putParcelableArrayList(
+                AutofillScenario.BUNDLE_KEY_NEW_PASSWORD_IDS, ArrayList(newPassword)
+            )
+        }
+    }
+    is GenericAutofillScenario<AutofillId> -> {
+        Bundle(3).apply {
+            putParcelable(AutofillScenario.BUNDLE_KEY_USERNAME_ID, username)
+            putBoolean(AutofillScenario.BUNDLE_KEY_FILL_USERNAME, fillUsername)
+            putParcelableArrayList(
+                AutofillScenario.BUNDLE_KEY_GENERIC_PASSWORD_IDS, ArrayList(genericPassword)
+            )
+        }
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+@JvmName("toClientStateFormField")
+fun AutofillScenario<FormField>.toClientState(): Bundle = map { it.autofillId }.toClientState()
+
+@RequiresApi(Build.VERSION_CODES.O)
+fun AutofillScenario<AutofillId>.recoverNodes(structure: AssistStructure): AutofillScenario<AssistStructure.ViewNode>? {
+    return map { autofillId ->
+        structure.findNodeByAutofillId(autofillId) ?: return null
+    }
+}
+
+private val AutofillScenario<FormField>.usernameToSave: String?
+    @RequiresApi(Build.VERSION_CODES.O) get() {
+        val value = username?.autofillValue ?: return null
+        return if (value.isText) value.textValue.toString() else null
+    }
+
+private val AutofillScenario<FormField>.passwordToSave: String?
+    @RequiresApi(Build.VERSION_CODES.O) get() {
+        val value = username?.autofillValue ?: return null
+        return if (value.isText) value.textValue.toString() else null
+    }
 
 @RequiresApi(Build.VERSION_CODES.O)
 interface FieldMatcher {
@@ -327,11 +413,29 @@ class AutofillRule private constructor(
         fun build() = AutofillRule(matchers, applyInSingleOriginMode)
     }
 
+    private fun passesOriginCheck(
+        scenario: AutofillScenario<FormField>, singleOriginMode: Boolean
+    ): Boolean {
+        return if (singleOriginMode) {
+            // In single origin mode, only the browsers URL bar (which is never filled) should have
+            // a webOrigin.
+            scenario.allFields.all { it.webOrigin == null }
+        } else {
+            // In apps or browsers in multi origin mode, every field in a dataset has to belong to
+            // the same (possibly null) origin.
+            scenario.allFields.map { it.webOrigin }.toSet().size == 1
+        }.also {
+            // FIXME
+            if (!it)
+                d { "Rule failed origin check" }
+        }
+    }
+
     fun apply(
         allPassword: List<FormField>, allUsername: List<FormField>, singleOriginMode: Boolean
-    ): AutofillScenario? {
+    ): AutofillScenario<FormField>? {
         if (singleOriginMode && !applyInSingleOriginMode) return null
-        val scenarioBuilder = AutofillScenario.Builder()
+        val scenarioBuilder = AutofillScenario.Builder<FormField>()
         val alreadyMatched = mutableListOf<FormField>()
         for ((type, matcher, optional) in matchers) {
             val matchResult = when (type) {
@@ -342,6 +446,8 @@ class AutofillRule private constructor(
                 FillableFieldType.Username -> {
                     check(matchResult.size == 1 && scenarioBuilder.username == null)
                     scenarioBuilder.username = matchResult.single()
+                    // E.g. hidden username fields can be saved but not filled.
+                    scenarioBuilder.fillUsername = scenarioBuilder.username?.isFillable == true
                 }
                 FillableFieldType.CurrentPassword -> scenarioBuilder.currentPassword.addAll(
                     matchResult
@@ -351,8 +457,11 @@ class AutofillRule private constructor(
                     matchResult
                 )
             }
+            alreadyMatched.addAll(matchResult)
         }
-        return null
+        return scenarioBuilder.build().takeIf {
+            passesOriginCheck(it, singleOriginMode = singleOriginMode)
+        }
     }
 }
 
@@ -370,11 +479,11 @@ class AutofillStrategy(private val rules: List<AutofillRule>) {
         fun build() = AutofillStrategy(rules)
     }
 
-    fun apply(fields: List<FormField>, multiOriginSupport: Boolean): AutofillScenario? {
+    fun apply(fields: List<FormField>, multiOriginSupport: Boolean): AutofillScenario<FormField>? {
         val possiblePasswordFields =
-            fields.filter { it.passwordCertainty > CertaintyLevel.Possible }
+            fields.filter { it.passwordCertainty >= CertaintyLevel.Possible }
         val possibleUsernameFields =
-            fields.filter { it.usernameCertainty > CertaintyLevel.Possible }
+            fields.filter { it.usernameCertainty >= CertaintyLevel.Possible }
         // Return the result of the first rule that matches
         for (rule in rules) {
             return rule.apply(possiblePasswordFields, possibleUsernameFields, multiOriginSupport)

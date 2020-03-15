@@ -106,6 +106,8 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int) {
         isHtmlField && htmlInputType in HTML_INPUT_FIELD_TYPES_PASSWORD
     private val isHtmlTextField = isHtmlField && htmlInputType in HTML_INPUT_FIELD_TYPES_FILLABLE
 
+    private val isTextField = isAndroidTextField || isHtmlTextField
+
     // Autofill hint detection for native fields
     private val autofillHints = node.autofillHints?.filter { isSupportedHint(it) } ?: emptyList()
     private val notExcludedByAutofillHints =
@@ -132,8 +134,16 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int) {
     private val hasAutocompleteHintPassword =
         hasAutocompleteHintCurrentPassword || hasAutocompleteHintNewPassword
 
+    // Hidden username fields are used to help password managers deal with two-step logins
+    // See: https://www.chromium.org/developers/design-documents/form-styles-that-chromium-understands
+    private val isHiddenUsernameField = !isVisible && isHtmlTextField && hasAutocompleteHintUsername
+
+    private val notExcludedByHints = notExcludedByAutofillHints && notExcludedByAutocompleteHints
+
     val isFillable =
-        isVisible && (isAndroidTextField || isHtmlTextField) && hasAutofillTypeText && notExcludedByAutofillHints && notExcludedByAutocompleteHints
+        isVisible && isTextField && hasAutofillTypeText && notExcludedByHints
+    val isSaveable =
+        (isVisible || isHiddenUsernameField) && isTextField && hasAutofillTypeText && notExcludedByHints
 
     // Exclude fields based on hint and resource ID
     // Note: We still report excluded fields as fillable since they allow adjacency heuristics,
@@ -155,7 +165,7 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int) {
     // Username field heuristics (based only on the current field)
     private val isPossibleUsernameField = shouldBeFilled && !isPossiblePasswordField
     private val isCertainUsernameField =
-        isPossibleUsernameField && (hasAutofillHintUsername && hasAutocompleteHintUsername)
+        isPossibleUsernameField && (hasAutofillHintUsername || hasAutocompleteHintUsername)
     private val isLikelyUsernameField = isCertainUsernameField || (USERNAME_HEURISTIC_TERMS.any {
         idEntry.contains(it) || hint.contains(it)
     })
@@ -179,5 +189,15 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int) {
         val description =
             "\"$hint\", $idEntry, focused=$isFocused, inputType=$inputType, $webOrigin"
         return "$field ($description): password=$passwordCertainty, username=$usernameCertainty"
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (other == null) return false
+        if (this.javaClass != other.javaClass) return false
+        return autofillId == (other as FormField).autofillId
+    }
+
+    override fun hashCode(): Int {
+        return autofillId.hashCode()
     }
 }

@@ -248,8 +248,8 @@
     <string name="oreo_autofill_match_with">Match with %1$s</string>
     <string name="oreo_autofill_matches_clear_existing">Clear existing matches</string>
     <string name="oreo_autofill_search_in_store">Search in store…</string>
+    <string name="oreo_autofill_save_internal_error">Save failed due to an internal error</string>
     <string name="oreo_autofill_save_app_not_supported">This app is currently not supported</string>
-    <string name="oreo_autofill_save_no_password_field">Can only fill single-step login forms</string>
     <string name="oreo_autofill_save_invalid_password">Couldn\'t extract password, please use a different browser for now</string>
     <string name="oreo_autofill_generate_password">Generate password…</string>
     <string name="oreo_autofill_publisher_changed">The app\'s publisher has changed; this may be a phishing attempt.</string>

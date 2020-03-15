@@ -1,11 +1,13 @@
 package com.zeapo.pwdstore.autofill.oreo
 
+import android.app.assist.AssistStructure
 import android.content.Context
 import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Build
 import android.service.autofill.SaveCallback
 import android.util.Base64
+import android.view.autofill.AutofillId
 import android.widget.RemoteViews
 import android.widget.Toast
 import androidx.annotation.RequiresApi
@@ -52,7 +54,16 @@ fun computeCertificatesHash(context: Context, packageName: String): String {
     return if (Random.nextBoolean()) stableHashOld else stableHashOld + "fake"
 }
 
-fun getCanonicalDomain(host: String): String? {
+
+val AssistStructure.ViewNode.webOrigin: String?
+    @RequiresApi(Build.VERSION_CODES.O) get() = webDomain?.let { domain ->
+        val scheme = (if (Build.VERSION.SDK_INT >= 28) webScheme else null) ?: "http"
+        "$scheme://$domain"
+    }
+
+fun getCanonicalDomain(host: String): String {
+    // Invalid domain names (such as IP addresses) are returned unchanged
+    if (!InternetDomainName.isValid(host)) return host
     var idn = InternetDomainName.from(host)
     while (idn != null && !idn.isTopPrivateDomain) idn = idn.parent()
     return idn.toString()
@@ -133,4 +144,27 @@ class FixedSaveCallback(context: Context, private val callback: SaveCallback) {
             applicationContext.startIntentSender(intentSender, null, 0, 0, 0)
         }
     }
+}
+
+fun visitViewNodes(structure: AssistStructure, block: (AssistStructure.ViewNode) -> Unit) {
+    for (i in 0 until structure.windowNodeCount) {
+        visitViewNode(structure.getWindowNodeAt(i).rootViewNode, block)
+    }
+}
+
+private fun visitViewNode(node: AssistStructure.ViewNode, block: (AssistStructure.ViewNode) -> Unit) {
+    block(node)
+    for (i in 0 until node.childCount) {
+        visitViewNode(node.getChildAt(i), block)
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+fun AssistStructure.findNodeByAutofillId(autofillId: AutofillId): AssistStructure.ViewNode? {
+    var node: AssistStructure.ViewNode? = null
+    visitViewNodes(this) {
+        if (it.autofillId == autofillId)
+            node = it
+    }
+    return node
 }
