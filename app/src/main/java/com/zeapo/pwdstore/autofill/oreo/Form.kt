@@ -225,7 +225,8 @@ class FillableForm private constructor(
             context: Context, credentials: Credentials, clientState: Bundle, action: AutofillAction
         ): Dataset {
             val remoteView = makePlaceholderRemoteView(context)
-            val scenario = AutofillScenario.fromBundle(clientState)
+            // FIXME
+            val scenario = AutofillScenario.fromBundle(clientState)!!
             return Dataset.Builder(remoteView).run {
                 fillWith(scenario, action, credentials)
                 build()

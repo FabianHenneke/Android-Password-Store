@@ -14,7 +14,7 @@ enum class AutofillAction {
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-sealed class AutofillScenario<out T>() {
+sealed class AutofillScenario<out T: Any>() {
     abstract val username: T?
     abstract val fillUsername: Boolean
 
@@ -53,7 +53,7 @@ sealed class AutofillScenario<out T>() {
         }
     }
 
-    class Builder<T> {
+    class Builder<T: Any> {
         var username: T? = null
         var fillUsername = false
         val currentPassword = mutableListOf<T>()
@@ -162,7 +162,7 @@ fun Dataset.Builder.fillWith(
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-data class ClassifiedAutofillScenario<T>(
+data class ClassifiedAutofillScenario<T: Any>(
     override val username: T?,
     override val fillUsername: Boolean,
     val currentPassword: List<T>,
@@ -170,11 +170,11 @@ data class ClassifiedAutofillScenario<T>(
 ) : AutofillScenario<T>()
 
 @RequiresApi(Build.VERSION_CODES.O)
-data class GenericAutofillScenario<T>(
+data class GenericAutofillScenario<T: Any>(
     override val username: T?, override val fillUsername: Boolean, val genericPassword: List<T>
 ) : AutofillScenario<T>()
 
-inline fun <T, S> AutofillScenario<T>.map(transform: (T) -> S): AutofillScenario<S> {
+inline fun <T: Any, S: Any> AutofillScenario<T>.map(transform: (T) -> S): AutofillScenario<S> {
     val builder = AutofillScenario.Builder<S>()
     builder.username = username?.let(transform)
     builder.fillUsername = fillUsername

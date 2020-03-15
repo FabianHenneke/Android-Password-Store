@@ -6,45 +6,41 @@ import com.zeapo.pwdstore.autofill.oreo.CertaintyLevel.*
 
 @RequiresApi(Build.VERSION_CODES.O)
 val autofillStrategy = strategy {
-    fillRule {
-        stopOnMatch = true
-        requiresMultiOriginSupport = false
-        genericPassword {
+    rule(applyInSingleOriginMode = true) {
+        newPassword {
             takeSingle {
-                passwordCertainty == Certain && hasAutocompleteHintCurrentPassword && isFocused
+                passwordCertainty >= Likely && hasAutocompleteHintNewPassword && isFocused
             }
         }
         username {
             takeSingle { alreadyMatched ->
-                usernameCertainty >= Likely && precedes(alreadyMatched.singleOrNull())
+                usernameCertainty >= Likely && directlyPrecedes(alreadyMatched.singleOrNull())
             }
         }
     }
 
-    generateRule {
-        requiresMultiOriginSupport = false
-        genericPassword {
+    rule(applyInSingleOriginMode = true) {
+        currentPassword {
             takeSingle {
-                passwordCertainty == Certain && hasAutocompleteHintNewPassword && isFocused
+                passwordCertainty >= Likely && hasAutocompleteHintCurrentPassword && isFocused
             }
         }
         username {
             takeSingle { alreadyMatched ->
-                usernameCertainty >= Likely && precedes(alreadyMatched.singleOrNull())
+                usernameCertainty >= Likely && directlyPrecedes(alreadyMatched.singleOrNull())
             }
         }
     }
 
-    fillRule {
-        requiresMultiOriginSupport = false
+    rule(applyInSingleOriginMode = true) {
         genericPassword {
-            takeSingle { passwordCertainty >= Possible && isFocused }
-            breakTieOnSingle { passwordCertainty >= Likely }
-            breakTieOnSingle { passwordCertainty >= Certain }
+            takeSingle {
+                passwordCertainty >= Likely && isFocused
+            }
         }
         username {
             takeSingle { alreadyMatched ->
-                usernameCertainty >= Likely && precedes(alreadyMatched.singleOrNull())
+                usernameCertainty >= Likely && directlyPrecedes(alreadyMatched.singleOrNull())
             }
         }
     }
