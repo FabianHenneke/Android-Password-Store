@@ -76,7 +76,6 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int) {
     }
 
     val autofillId: AutofillId = node.autofillId!!
-    val autofillValue: AutofillValue? = node.autofillValue
 
     // Basic autofill exclusion checks
     private val hasAutofillTypeText = node.autofillType == View.AUTOFILL_TYPE_TEXT

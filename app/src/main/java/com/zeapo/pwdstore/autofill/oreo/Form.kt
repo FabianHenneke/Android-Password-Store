@@ -14,9 +14,9 @@ import android.service.autofill.SaveInfo
 import android.view.autofill.AutofillId
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
+import androidx.core.os.bundleOf
 import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.e
-import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillDecryptActivity
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillFilterView
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillPublisherChangedActivity
@@ -69,17 +69,34 @@ sealed class FormOrigin(open val identifier: String) {
     data class Web(override val identifier: String) : FormOrigin(identifier)
     data class App(override val identifier: String) : FormOrigin(identifier)
 
-    fun getPrettyIdentifier(context: Context, untrusted: Boolean = true): String {
-        return when (this) {
-            is Web -> identifier
-            is App -> {
-                val info = context.packageManager.getApplicationInfo(
-                    identifier, PackageManager.GET_META_DATA
-                )
-                val label = context.packageManager.getApplicationLabel(info)
-                if (untrusted) "“$label”" else "$label"
+    companion object {
+        private const val BUNDLE_KEY_WEB_IDENTIFIER = "webIdentifier"
+        private const val BUNDLE_KEY_APP_IDENTIFIER = "appIdentifier"
+
+        fun fromBundle(bundle: Bundle): FormOrigin? {
+            val webIdentifier = bundle.getString(BUNDLE_KEY_WEB_IDENTIFIER)
+            if (webIdentifier != null) {
+                return Web(webIdentifier)
+            } else {
+                return App(bundle.getString(BUNDLE_KEY_APP_IDENTIFIER) ?: return null)
             }
         }
+    }
+
+    fun getPrettyIdentifier(context: Context, untrusted: Boolean = true) = when (this) {
+        is Web -> identifier
+        is App -> {
+            val info = context.packageManager.getApplicationInfo(
+                identifier, PackageManager.GET_META_DATA
+            )
+            val label = context.packageManager.getApplicationLabel(info)
+            if (untrusted) "“$label”" else "$label"
+        }
+    }
+
+    fun toBundle() = when (this) {
+        is Web -> bundleOf(BUNDLE_KEY_WEB_IDENTIFIER to identifier)
+        is App -> bundleOf(BUNDLE_KEY_APP_IDENTIFIER to identifier)
     }
 }
 
@@ -187,7 +204,9 @@ private class Form(
             // detected fillable or saveable fields. If this origin is null, but we encountered web
             // origins elsewhere in the AssistStructure, the situation is uncertain and Autofill
             // should not be offered.
-            webOriginToFormOrigin(scenario.allFields.map { it.webOrigin }.singleOrNull() ?: return null)
+            webOriginToFormOrigin(
+                scenario.allFields.map { it.webOrigin }.singleOrNull() ?: return null
+            )
         }
     }
 
@@ -206,7 +225,7 @@ class FillableForm private constructor(
             context: Context, credentials: Credentials, clientState: Bundle, action: AutofillAction
         ): Dataset {
             val remoteView = makePlaceholderRemoteView(context)
-            val scenario = AutofillScenario.fromClientState(clientState)
+            val scenario = AutofillScenario.fromBundle(clientState)
             return Dataset.Builder(remoteView).run {
                 fillWith(scenario, action, credentials)
                 build()
@@ -218,14 +237,19 @@ class FillableForm private constructor(
         ): FillableForm? {
             val form = Form(context, structure, isManualRequest)
             if (form.formOrigin == null || form.scenario == null) return null
-            return FillableForm(form.formOrigin, form.scenario, form.ignoredIds, form.originSupportsSave)
+            return FillableForm(
+                form.formOrigin, form.scenario, form.ignoredIds, form.originSupportsSave
+            )
         }
     }
 
-    private val clientState = scenario.toClientState()
+    private val clientState = scenario.toBundle().apply {
+        putAll(formOrigin.toBundle())
+    }
 
     // We do not offer save when the only relevant field is a username field or there is no field.
-    private val scenarioSupportsSave = scenario.fieldsToSave.minus(listOfNotNull(scenario.username)).isNotEmpty()
+    private val scenarioSupportsSave =
+        scenario.fieldsToSave.minus(listOfNotNull(scenario.username)).isNotEmpty()
     private val canBeSaved = originSupportsSave && scenarioSupportsSave
 
     private fun makePlaceholderDataset(
@@ -242,9 +266,7 @@ class FillableForm private constructor(
         if (scenario.fieldsToFillOn(AutofillAction.Match).isEmpty()) return null
         val remoteView = makeFillMatchRemoteView(context, file, formOrigin)
         val intentSender = AutofillDecryptActivity.makeDecryptFileIntentSender(file, context)
-        return makePlaceholderDataset(
-            remoteView, intentSender, AutofillAction.Match
-        )
+        return makePlaceholderDataset(remoteView, intentSender, AutofillAction.Match)
     }
 
     private fun makeSearchDataset(context: Context): Dataset? {
@@ -252,18 +274,14 @@ class FillableForm private constructor(
         val remoteView = makeSearchAndFillRemoteView(context, formOrigin)
         val intentSender =
             AutofillFilterView.makeMatchAndDecryptFileIntentSender(context, formOrigin)
-        return makePlaceholderDataset(
-            remoteView, intentSender, AutofillAction.Search
-        )
+        return makePlaceholderDataset(remoteView, intentSender, AutofillAction.Search)
     }
 
     private fun makeGenerateDataset(context: Context): Dataset? {
         if (scenario.fieldsToFillOn(AutofillAction.Generate).isEmpty()) return null
         val remoteView = makeGenerateAndFillRemoteView(context, formOrigin)
         val intentSender = AutofillSaveActivity.makeSaveIntentSender(context, null, formOrigin)
-        return makePlaceholderDataset(
-            remoteView, intentSender, AutofillAction.Generate
-        )
+        return makePlaceholderDataset(remoteView, intentSender, AutofillAction.Generate)
     }
 
     private fun makePublisherChangedDataset(
@@ -273,7 +291,7 @@ class FillableForm private constructor(
         val intentSender = AutofillPublisherChangedActivity.makePublisherChangedIntentSender(
             context, publisherChangedException
         )
-        return makePlaceholderDataset(remoteView, intentSender)
+        return makePlaceholderDataset(remoteView, intentSender, AutofillAction.Match)
     }
 
     private fun makePublisherChangedResponse(

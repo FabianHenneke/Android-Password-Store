@@ -6,7 +6,6 @@ import android.service.autofill.*
 import androidx.annotation.RequiresApi
 import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.e
-import com.github.ajalt.timberkt.w
 import com.zeapo.pwdstore.BuildConfig
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillSaveActivity
@@ -30,16 +29,13 @@ class OreoAutofillService : AutofillService() {
     }
 
     override fun onFillRequest(
-        request: FillRequest,
-        cancellationSignal: CancellationSignal,
-        callback: FillCallback
+        request: FillRequest, cancellationSignal: CancellationSignal, callback: FillCallback
     ) {
-        val structureToFill = request.fillContexts.lastOrNull()?.structure
-        if (structureToFill == null) {
+        val structure = request.fillContexts.lastOrNull()?.structure ?: run {
             callback.onSuccess(null)
             return
         }
-        if (structureToFill.activityComponent.packageName in DENYLISTED_PACKAGES) {
+        if (structure.activityComponent.packageName in DENYLISTED_PACKAGES) {
             if (Build.VERSION.SDK_INT >= 28) {
                 callback.onSuccess(FillResponse.Builder().run {
                     disableAutofill(DISABLE_AUTOFILL_DURATION_MS)
@@ -52,11 +48,12 @@ class OreoAutofillService : AutofillService() {
         }
         val isManualRequest =
             request.flags and FillRequest.FLAG_MANUAL_REQUEST == FillRequest.FLAG_MANUAL_REQUEST
-        val formToFill = FillableForm.parseAssistStructure(this, structureToFill, isManualRequest) ?: run {
-            d { "Form cannot be filled" }
-            callback.onSuccess(null)
-            return
-        }
+        val formToFill =
+            FillableForm.parseAssistStructure(this, structure, isManualRequest) ?: run {
+                d { "Form cannot be filled" }
+                callback.onSuccess(null)
+                return
+            }
         formToFill.fillCredentials(this, callback)
     }
 
@@ -73,35 +70,30 @@ class OreoAutofillService : AutofillService() {
             callback.onFailure(getString(R.string.oreo_autofill_save_internal_error))
             return
         }
-        val scenario = AutofillScenario.fromClientState(clientState).recoverNodes(structure) ?: run {
-            e { "Failed to recover nodes from Autofill IDs" }
+        val scenario = AutofillScenario.fromBundle(clientState)?.recoverNodes(structure) ?: run {
+            e { "Failed to recover client state or nodes from client state" }
+            callback.onFailure(getString(R.string.oreo_autofill_save_internal_error))
+            return
+        }
+        val formOrigin = FormOrigin.fromBundle(clientState) ?: run {
+            e { "Failed to recover form origin from client state" }
             callback.onFailure(getString(R.string.oreo_autofill_save_internal_error))
             return
         }
 
-        val usernameValue = scenario.username?.autofillValue
-        val username = if (usernameValue?.isText == true) usernameValue.textValue else null
-        val passwordValue = scenario.fieldsToSave
-        if (passwordValue == null) {
-            callback.onFailure(context.getString(R.string.oreo_autofill_save_invalid_password))
-            return
-        }
-        val password = if (passwordValue.isText) {
-            passwordValue.textValue
-        } else {
-            callback.onFailure(context.getString(R.string.oreo_autofill_save_invalid_password))
+        val username = scenario.usernameValue
+        val password = scenario.passwordValue ?: run {
+            callback.onFailure(getString(R.string.oreo_autofill_save_passwords_dont_match))
             return
         }
         // Do not store masked passwords
         if (password.all { it == '*' || it == '•' }) {
-            callback.onFailure(context.getString(R.string.oreo_autofill_save_invalid_password))
+            callback.onFailure(getString(R.string.oreo_autofill_save_invalid_password))
             return
         }
-        val credentials = Credentials(username?.toString(), password.toString())
+        val credentials = Credentials(username, password)
         callback.onSuccess(
-            AutofillSaveActivity.makeSaveIntentSender(
-                context, credentials, formOrigin!!
-            )
+            AutofillSaveActivity.makeSaveIntentSender(this, credentials, formOrigin = formOrigin)
         )
     }
 }
