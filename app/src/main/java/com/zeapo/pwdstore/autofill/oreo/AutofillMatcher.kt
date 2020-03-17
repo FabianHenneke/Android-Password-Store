@@ -34,6 +34,9 @@ private fun Context.matchPreferences(formOrigin: FormOrigin): SharedPreferences 
 class AutofillPublisherChangedException(val appPackage: String) :
     Exception("The publisher of '$appPackage' changed since an entry was first matched with this app")
 
+/**
+ * Manages "matches", i.e., associations between apps or websites and Password Store entries.
+ */
 class AutofillMatcher {
     companion object {
         private const val MAX_NUM_MATCHES = 10
@@ -78,6 +81,14 @@ class AutofillMatcher {
             // browsers we trust to verify the origin.
         }
 
+        /**
+         * Get all Password Store entries that have already been associated with [formOrigin] by the
+         * user.
+         *
+         * If [formOrigin] represents an app and that app's certificates have changed since the
+         * first time the user associated an entry with it, an [AutofillPublisherChangedException]
+         * will be thrown.
+         */
         fun getMatchesFor(context: Context, formOrigin: FormOrigin): List<File> {
             if (hasFormOriginHashChanged(context, formOrigin)) {
                 throw AutofillPublisherChangedException(context.getString(R.string.oreo_autofill_publisher_changed))
@@ -99,6 +110,13 @@ class AutofillMatcher {
             }
         }
 
+        /**
+         * Associates the store entry [file] with [formOrigin], such that future Autofill responses
+         * to requests from this app or website offer this entry as a dataset.
+         *
+         * The maximum number of matches is limited by [MAX_NUM_MATCHES] since older versions of
+         * Android may crash when too many datasets are offered.
+         */
         fun addMatchFor(context: Context, formOrigin: FormOrigin, file: File) {
             if (!file.exists()) return
             if (hasFormOriginHashChanged(context, formOrigin)) {
@@ -126,6 +144,10 @@ class AutofillMatcher {
             d { "Stored match for $formOrigin" }
         }
 
+        /**
+         * Goes through all existing matches and updates their associated entries by using
+         * [sourceDestinationMap] as a lookup table.
+         */
         fun updateMatchesFor(context: Context, sourceDestinationMap: Map<File, File>) {
             val oldNewPathMap = sourceDestinationMap.mapValues { it.value.absolutePath }
                 .mapKeys { it.key.absolutePath }

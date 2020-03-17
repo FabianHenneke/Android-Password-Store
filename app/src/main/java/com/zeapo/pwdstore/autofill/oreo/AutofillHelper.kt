@@ -4,6 +4,7 @@
  */
 package com.zeapo.pwdstore.autofill.oreo
 
+import android.annotation.SuppressLint
 import android.app.assist.AssistStructure
 import android.content.Context
 import android.content.IntentSender
@@ -22,7 +23,6 @@ import com.zeapo.pwdstore.PasswordEntry
 import com.zeapo.pwdstore.R
 import java.io.File
 import java.security.MessageDigest
-import kotlin.random.Random
 
 
 private fun ByteArray.sha256(): ByteArray {
@@ -41,13 +41,20 @@ private fun stableHash(array: Collection<ByteArray>): String {
     return hashes.sorted().joinToString(separator = ";")
 }
 
-fun computeCertificatesHash(context: Context, packageName: String): String {
+/**
+ * Computes a stable hash of all certificates associated to the installed app with package name
+ * [appPackage].
+ *
+ * In most cases apps will only have a single certificate. If there are multiple, this functions
+ * returns all of them in sorted order and separated with `;`.
+ */
+fun computeCertificatesHash(context: Context, appPackage: String): String {
     val signaturesOld =
-        context.packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
+        context.packageManager.getPackageInfo(appPackage, PackageManager.GET_SIGNATURES).signatures
     val stableHashOld = stableHash(signaturesOld.map { it.toByteArray() })
     if (Build.VERSION.SDK_INT >= 28) {
         val info = context.packageManager.getPackageInfo(
-            packageName, PackageManager.GET_SIGNING_CERTIFICATES
+            appPackage, PackageManager.GET_SIGNING_CERTIFICATES
         )
         val signaturesNew =
             info.signingInfo.signingCertificateHistory ?: info.signingInfo.apkContentsSigners
@@ -57,13 +64,21 @@ fun computeCertificatesHash(context: Context, packageName: String): String {
     return stableHashOld
 }
 
-
+/**
+ * Returns the "origin" (without port information) of the [AssistStructure.ViewNode] derived from
+ * its `webDomain` and `webScheme`, if available.
+ */
 val AssistStructure.ViewNode.webOrigin: String?
     @RequiresApi(Build.VERSION_CODES.O) get() = webDomain?.let { domain ->
         val scheme = (if (Build.VERSION.SDK_INT >= 28) webScheme else null) ?: "http"
         "$scheme://$domain"
     }
 
+/**
+ * Returns the eTLD+1, i.e. the direct subdomain of the public suffix of [host].
+ *
+ * Note: Invalid hosts are returned unchanged and thus never collide with valid canonical domains.
+ */
 fun getCanonicalDomain(host: String): String {
     // Invalid domain names (such as IP addresses) are returned unchanged
     if (!InternetDomainName.isValid(host)) return host

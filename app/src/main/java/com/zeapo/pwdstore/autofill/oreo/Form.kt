@@ -27,7 +27,9 @@ import com.zeapo.pwdstore.autofill.oreo.ui.AutofillPublisherChangedActivity
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillSaveActivity
 import java.io.File
 
-
+/**
+ * A unique identifier for either an Android app (package name) or a website (origin minus port).
+ */
 sealed class FormOrigin(open val identifier: String) {
     data class Web(override val identifier: String) : FormOrigin(identifier)
     data class App(override val identifier: String) : FormOrigin(identifier)
@@ -63,6 +65,9 @@ sealed class FormOrigin(open val identifier: String) {
     }
 }
 
+/**
+ * Manages the detection of fields to fill in an [AssistStructure] and determines the [FormOrigin].
+ */
 @RequiresApi(Build.VERSION_CODES.O)
 private class Form(context: Context, structure: AssistStructure) {
 
@@ -183,6 +188,10 @@ private class Form(context: Context, structure: AssistStructure) {
     }
 }
 
+/**
+ * Represents a collection of fields in a specific app that can be filled or saved. This is the
+ * entry point to all fill and save features.
+ */
 @RequiresApi(Build.VERSION_CODES.O)
 class FillableForm private constructor(
     private val formOrigin: FormOrigin,
@@ -204,6 +213,9 @@ class FillableForm private constructor(
             }
         }
 
+        /**
+         * Returns a [FillableForm] if a login form could be detected in [structure].
+         */
         fun parseAssistStructure(context: Context, structure: AssistStructure): FillableForm? {
             val form = Form(context, structure)
             if (form.formOrigin == null || form.scenario == null) return null
@@ -320,6 +332,9 @@ class FillableForm private constructor(
         }
     }
 
+    /**
+     * Creates and returns a suitable [FillResponse] to the Autofill framework.
+     */
     fun fillCredentials(context: Context, callback: FillCallback) {
         val matchedFiles = try {
             AutofillMatcher.getMatchesFor(context, formOrigin)

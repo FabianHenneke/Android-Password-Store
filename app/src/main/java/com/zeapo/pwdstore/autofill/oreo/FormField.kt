@@ -17,10 +17,12 @@ enum class CertaintyLevel {
     Impossible, Possible, Likely, Certain
 }
 
+/**
+ * Represents a single potentially fillable or saveable field together with all meta data
+ * extracted from its [AssistStructure.ViewNode].
+ */
 @RequiresApi(Build.VERSION_CODES.O)
-class FormField(node: AssistStructure.ViewNode, private val index: Int, private val passDownWebViewOrigins: Boolean, private val passedDownWebOrigin: String? = null) {
-
-    constructor(node: AssistStructure.ViewNode, index: Int, inheritedWebOrigin: String?): this(node, index, true, inheritedWebOrigin)
+class FormField(node: AssistStructure.ViewNode, private val index: Int, passDownWebViewOrigins: Boolean, passedDownWebOrigin: String? = null) {
 
     companion object {
 

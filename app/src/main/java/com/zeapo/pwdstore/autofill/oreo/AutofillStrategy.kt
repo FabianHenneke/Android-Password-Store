@@ -18,6 +18,10 @@ private inline fun <T> Pair<T, T>.any(predicate: (T) -> Boolean) =
 private inline fun <T> Pair<T, T>.none(predicate: (T) -> Boolean) =
     !predicate(first) && !predicate(second)
 
+/**
+ * The strategy used to detect [AutofillScenario]s; expressed using the DSL implemented in
+ * [AutofillDsl].
+ */
 @RequiresApi(Build.VERSION_CODES.O)
 val autofillStrategy = strategy {
     rule {
