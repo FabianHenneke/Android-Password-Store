@@ -128,7 +128,10 @@ private val BROWSER_SAVE_METHOD = mapOf(
     "org.mozilla.focus" to 0,
     "org.mozilla.fenix" to 0,
     "org.mozilla.fenix.nightly" to 0,
-    "org.mozilla.fennec_aurora" to 0
+    "org.mozilla.fennec_aurora" to 0,
+    "com.opera.mini.native" to 0,
+    "com.opera.mini.native.beta" to 0,
+    "com.opera.touch" to 0
 )
 
 fun isBrowserWithSaveSupport(appPackage: String): Boolean = getBrowserSaveFlag(appPackage) != null
