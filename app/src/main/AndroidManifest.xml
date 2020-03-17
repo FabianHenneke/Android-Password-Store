@@ -52,7 +52,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.accessibilityservice"
-                android:resource="@xml/oreo_autofill_config" />
+                android:resource="@xml/autofill_config" />
         </service>
         <service
           android:name=".ClipboardService"

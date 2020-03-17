@@ -55,14 +55,22 @@ import androidx.annotation.RequiresApi
 private val TRUSTED_BROWSER_CERTIFICATE_HASH = mapOf(
     "com.android.chrome" to "8P1sW0EPJcslw7UzRsiXL64w+O50Ed+RBICtay1g24M=",
     "com.brave.browser" to "nC23BRNRX9v7vFhbPt89cSPU3GfJT/0wY2HB15u/GKw=",
+    "com.chrome.beta" to "2mM9NLaeY64hA7SdU84FL8X388U6q5T9wqIIvf0UJJw=",
+    "com.chrome.canary" to "IBnfofsj779wxbzRRDxb6rBPPy/0Nm6aweNFdjmiTPw=",
+    "com.chrome.dev" to "kETuX+5LvF4h3URmVDHE6x8fcaMnFqC8knvLs5Izyr8=",
     "com.duckduckgo.mobile.android" to "u3uzHFc8RqHaf8XFKKas9DIQhFb+7FCBDH8zaU6z0tQ=",
-    "org.mozilla.firefox" to "p4tipRZbRJSy/q2edqKA0i2Tf+5iUa7OWZRGsuoxmwQ=",
-    "org.mozilla.firefox_beta" to "p4tipRZbRJSy/q2edqKA0i2Tf+5iUa7OWZRGsuoxmwQ=",
-    "org.mozilla.klar" to "YgOkc7421k7jf4f6UA7bx56rkwYQq5ufpMp9XB8bT/w=",
-    "org.mozilla.focus" to "YgOkc7421k7jf4f6UA7bx56rkwYQq5ufpMp9XB8bT/w=",
+    "com.microsoft.emmx" to "AeGZlxCoLCdJtNUMRF3IXWcLYTYInQp2anOCfIKh6sk=",
+    "com.opera.mini.native" to "V6y8Ul8bLr0ZGWzW8BQ5fMkQ/RiEHgroUP68Ph5ZP/I=",
+    "com.opera.mini.native.beta" to "V6y8Ul8bLr0ZGWzW8BQ5fMkQ/RiEHgroUP68Ph5ZP/I=",
+    "com.opera.touch" to "qtjiBNJNF3k0yc0MY8xqo4779CxKaVcJfiIQ9X+qZ6o=",
     "org.mozilla.fenix" to "UAR3kIjn+YjVvFzF+HmP6/T4zQhKGypG79TI7krq8hE=",
     "org.mozilla.fenix.nightly" to "d+rEzu02r++6dheZMd1MwZWrDNVLrzVdIV57vdKOQCo=",
     "org.mozilla.fennec_aurora" to "vASIg40G9Mpr8yOG2qsN2OvPPncweHRZ9i+zzRShuqo=",
+    "org.mozilla.fennec_fdroid" to "BmZTWO/YugW+I2pHoSywlY19dd2TnXfCsx9TmFN+vcU=",
+    "org.mozilla.firefox" to "p4tipRZbRJSy/q2edqKA0i2Tf+5iUa7OWZRGsuoxmwQ=",
+    "org.mozilla.firefox_beta" to "p4tipRZbRJSy/q2edqKA0i2Tf+5iUa7OWZRGsuoxmwQ=",
+    "org.mozilla.focus" to "YgOkc7421k7jf4f6UA7bx56rkwYQq5ufpMp9XB8bT/w=",
+    "org.mozilla.klar" to "YgOkc7421k7jf4f6UA7bx56rkwYQq5ufpMp9XB8bT/w=",
     "org.torproject.torbrowser" to "IAYfBF5zfGc3XBd5TP7bQ2oDzsa6y3y5+WZCIFyizsg="
 )
 
@@ -72,10 +80,50 @@ fun isTrustedBrowser(context: Context, appPackage: String): Boolean {
     return certificateHash == expectedCertificateHash
 }
 
+enum class BrowserMultiOriginMethod {
+    None, WebView, Field
+}
+
+/**
+ * **Security assumption**: Browsers on this list correctly distinguish the web origins of form
+ * fields, e.g. on a page which contains both a first-party login form and an iframe with a
+ * (potentially malicious) third-party login form.
+ *
+ * There are two methods used by browsers:
+ * - Browsers based on Android's WebView report web domains on each WebView view node, which then
+ *   needs to be propagated to the child nodes ([BrowserMultiOriginMethod.WebView]).
+ * - Browsers with custom Autofill implementations report web domains on each input field (
+ *   [BrowserMultiOriginMethod.Field]).
+ */
+private val BROWSER_MULTI_ORIGIN_METHOD = mapOf(
+    "com.duckduckgo.mobile.android" to BrowserMultiOriginMethod.WebView,
+    "com.opera.mini.native" to BrowserMultiOriginMethod.WebView,
+    "com.opera.mini.native.beta" to BrowserMultiOriginMethod.WebView,
+    "com.opera.touch" to BrowserMultiOriginMethod.WebView,
+    "org.mozilla.fenix" to BrowserMultiOriginMethod.Field,
+    "org.mozilla.fenix.nightly" to BrowserMultiOriginMethod.Field,
+    "org.mozilla.fennec_aurora" to BrowserMultiOriginMethod.Field,
+    "org.mozilla.fennec_fdroid" to BrowserMultiOriginMethod.Field,
+    "org.mozilla.firefox" to BrowserMultiOriginMethod.WebView,
+    "org.mozilla.firefox_beta" to BrowserMultiOriginMethod.WebView,
+    "org.mozilla.focus" to BrowserMultiOriginMethod.Field,
+    "org.mozilla.klar" to BrowserMultiOriginMethod.Field,
+    "org.torproject.torbrowser" to BrowserMultiOriginMethod.WebView
+)
+
+fun getBrowserMultiOriginMethod(appPackage: String): BrowserMultiOriginMethod =
+    BROWSER_MULTI_ORIGIN_METHOD[appPackage] ?: BrowserMultiOriginMethod.None
+
+/**
+ * Browsers on this list issue Autofill save requests and provide unmasked passwords as
+ * `autofillValue`.
+ *
+ * Some browsers may not issue save requests automatically and thus need
+ * `FLAG_SAVE_ON_ALL_VIEW_INVISIBLE` to be set.
+ */
 @RequiresApi(Build.VERSION_CODES.O)
-private val BROWSERS_WITH_SAVE_SUPPORT = mapOf<String, Int>(
-    // "org.torproject.torbrowser": no save request
-    "com.duckduckgo.mobile.android" to SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE,
+private val BROWSER_SAVE_METHOD = mapOf(
+    "com.duckduckgo.mobile.android" to 0,
     "org.mozilla.klar" to 0,
     "org.mozilla.focus" to 0,
     "org.mozilla.fenix" to 0,
@@ -83,31 +131,6 @@ private val BROWSERS_WITH_SAVE_SUPPORT = mapOf<String, Int>(
     "org.mozilla.fennec_aurora" to 0
 )
 
-fun isBrowserWithSaveSupport(appPackage: String): Boolean {
-    return appPackage in BROWSERS_WITH_SAVE_SUPPORT
-}
+fun isBrowserWithSaveSupport(appPackage: String): Boolean = getBrowserSaveFlag(appPackage) != null
 
-fun getBrowserSaveFlag(appPackage: String): Int {
-    return BROWSERS_WITH_SAVE_SUPPORT[appPackage] ?: 0
-}
-
-/**
- * **Security assumption**: Browsers on this list correctly distinguish the web origins of form
- * fields, e.g. on a page which contains both a first-party login form and an iframe with a
- * (potentially malicious) third-party login form.
- */
-private val BROWSERS_WITH_MULTI_ORIGIN_SUPPORT = listOf(
-    "com.duckduckgo.mobile.android",
-    "org.mozilla.klar",
-    "org.mozilla.focus",
-    "org.mozilla.fenix",
-    "org.mozilla.fenix.nightly",
-    "org.mozilla.fennec_aurora",
-    "org.mozilla.firefox",
-    "org.mozilla.firefox_beta",
-    "org.torproject.torbrowser"
-)
-
-fun isBrowserWithMultiOriginSupport(appPackage: String): Boolean {
-    return appPackage in BROWSERS_WITH_MULTI_ORIGIN_SUPPORT
-}
+fun getBrowserSaveFlag(appPackage: String): Int? = BROWSER_SAVE_METHOD[appPackage]

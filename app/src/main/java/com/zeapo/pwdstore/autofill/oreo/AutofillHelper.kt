@@ -149,7 +149,7 @@ class FixedSaveCallback(context: Context, private val callback: SaveCallback) {
     }
 }
 
-fun visitViewNodes(structure: AssistStructure, block: (AssistStructure.ViewNode) -> Unit) {
+private fun visitViewNodes(structure: AssistStructure, block: (AssistStructure.ViewNode) -> Unit) {
     for (i in 0 until structure.windowNodeCount) {
         visitViewNode(structure.getWindowNodeAt(i).rootViewNode, block)
     }

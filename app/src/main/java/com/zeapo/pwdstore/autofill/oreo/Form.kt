@@ -78,10 +78,11 @@ private class Form(context: Context, structure: AssistStructure) {
 
     private val isBrowser = isTrustedBrowser(context, appPackage)
 
+    private val browserMultiOriginMethod = getBrowserMultiOriginMethod(appPackage)
+    private val singleOriginMode =
+        isBrowser && browserMultiOriginMethod == BrowserMultiOriginMethod.None
+
     private val isBrowserSupportingSave = isBrowser && isBrowserWithSaveSupport(appPackage)
-    private val isBrowserSupportingMultiOrigin =
-        isBrowser && isBrowserWithMultiOriginSupport(appPackage)
-    private val singleOriginMode = isBrowser && !isBrowserSupportingMultiOrigin
 
     private val webOrigins = mutableSetOf<String>()
 
@@ -100,22 +101,35 @@ private class Form(context: Context, structure: AssistStructure) {
     val originSupportsSave = formOrigin != null && (!isBrowser || isBrowserSupportingSave)
     val saveFlags = getBrowserSaveFlag(appPackage)
 
-    private fun parseStructure(structure: AssistStructure) = visitViewNodes(structure) { node ->
+    private fun parseStructure(structure: AssistStructure) {
+        for (i in 0 until structure.windowNodeCount) {
+            visitFormNode(structure.getWindowNodeAt(i).rootViewNode)
+        }
+    }
+
+    private fun visitFormNode(node: AssistStructure.ViewNode, inheritedWebOrigin: String? = null) {
         trackOrigin(node)
-        val field = FormField(node, fieldIndex)
+        val field = if (isBrowser && browserMultiOriginMethod == BrowserMultiOriginMethod.WebView) {
+            FormField(node, fieldIndex, true, inheritedWebOrigin)
+        } else {
+            check(inheritedWebOrigin == null)
+            FormField(node, fieldIndex, false)
+        }
         if (field.isFillable || field.isSaveable) {
-            d { "$field" }
+            d { "Relevant: $field" }
             relevantFields.add(field)
             fieldIndex++
         } else {
-//            d { "Found irrelevant field: $field" }
+            d { "Ignored : $field" }
             ignoredIds.add(field.autofillId)
+        }
+        for (i in 0 until node.childCount) {
+            visitFormNode(node.getChildAt(i), field.webOriginToPassDown)
         }
     }
 
     private fun detectFieldsToFill() = autofillStrategy.apply(relevantFields, singleOriginMode)
 
-    // TODO: Separately track WebView origins and verify Digital Asset Links
     private fun trackOrigin(node: AssistStructure.ViewNode) {
         if (!isBrowser) return
         node.webOrigin?.let {
@@ -136,24 +150,35 @@ private class Form(context: Context, structure: AssistStructure) {
 
     private fun determineFormOrigin(): FormOrigin? {
         if (scenario == null) return null
-        return if (!isBrowser || webOrigins.isEmpty()) {
+        if (!isBrowser || webOrigins.isEmpty()) {
             // Security assumption: If a trusted browser includes no web origin in the provided
             // AssistStructure, then the form is a native browser form (e.g. for a sync password).
-            FormOrigin.App(appPackage)
-        } else if (!isBrowserSupportingMultiOrigin) {
-            // Security assumption: If a browser is trusted but does not support tracking multiple
-            // origins, it is expected to annotate a single field, in most cases its URL bar, with a
-            // webOrigin. We err on the side of caution and only trust the reported web origin if it
-            // is a single one.
-            webOriginToFormOrigin(webOrigins.singleOrNull() ?: return null)
-        } else {
-            // For browsers with support for multiple origins, we take the single origin among the
-            // detected fillable or saveable fields. If this origin is null, but we encountered web
-            // origins elsewhere in the AssistStructure, the situation is uncertain and Autofill
-            // should not be offered.
-            webOriginToFormOrigin(
-                scenario.allFields.map { it.webOrigin }.toSet().singleOrNull() ?: return null
-            )
+            // TODO: Support WebViews in apps via Digital Asset Links
+            // See: https://developer.android.com/reference/android/service/autofill/AutofillService#web-security
+            return FormOrigin.App(appPackage)
+        }
+        return when (browserMultiOriginMethod) {
+            BrowserMultiOriginMethod.None -> {
+                // Security assumption: If a browser is trusted but does not support tracking
+                // multiple origins, it is expected to annotate a single field, in most cases its
+                // URL bar, with a webOrigin. We err on the side of caution and only trust the
+                // reported web origin if no other web origin appears on the page.
+                webOriginToFormOrigin(webOrigins.singleOrNull() ?: return null)
+            }
+            BrowserMultiOriginMethod.WebView,
+            BrowserMultiOriginMethod.Field -> {
+                // Security assumption: For browsers with full autofill support (the `Field` case),
+                // every form field is annotated with its origin. For browsers based on WebView,
+                // this is true after the web origins of WebViews are passed down to their children.
+                //
+                // For browsers with the WebView or Field method of multi origin support, we take
+                // the single origin among the detected fillable or saveable fields. If this origin
+                // is null, but we encountered web origins elsewhere in the AssistStructure, the
+                // situation is uncertain and Autofill should not be offered.
+                webOriginToFormOrigin(
+                    scenario.allFields.map { it.webOrigin }.toSet().singleOrNull() ?: return null
+                )
+            }
         }
     }
 }
@@ -164,7 +189,7 @@ class FillableForm private constructor(
     private val scenario: AutofillScenario<FormField>,
     private val ignoredIds: List<AutofillId>,
     originSupportsSave: Boolean,
-    private val saveFlags: Int
+    private val saveFlags: Int?
 ) {
     companion object {
         fun makeFillInDataset(
@@ -186,7 +211,7 @@ class FillableForm private constructor(
                 form.formOrigin,
                 form.scenario,
                 form.ignoredIds,
-                form.originSupportsSave,
+                form.saveFlags != null,
                 form.saveFlags
             )
         }
@@ -257,6 +282,7 @@ class FillableForm private constructor(
     // See: https://developer.android.com/reference/android/service/autofill/SaveInfo#FLAG_DELAY_SAVE
     private fun makeSaveInfo(): SaveInfo? {
         if (!canBeSaved) return null
+        check(saveFlags != null)
         val idsToSave = scenario.fieldsToSave.map { it.autofillId }.toTypedArray()
         if (idsToSave.isEmpty()) return null
         var saveDataTypes = SaveInfo.SAVE_DATA_TYPE_PASSWORD

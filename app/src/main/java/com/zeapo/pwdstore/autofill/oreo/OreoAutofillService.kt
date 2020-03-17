@@ -50,14 +50,11 @@ class OreoAutofillService : AutofillService() {
             }
             return
         }
-        val isManualRequest =
-            request.flags and FillRequest.FLAG_MANUAL_REQUEST == FillRequest.FLAG_MANUAL_REQUEST
-        val formToFill =
-            FillableForm.parseAssistStructure(this, structure) ?: run {
-                d { "Form cannot be filled" }
-                callback.onSuccess(null)
-                return
-            }
+        val formToFill = FillableForm.parseAssistStructure(this, structure) ?: run {
+            d { "Form cannot be filled" }
+            callback.onSuccess(null)
+            return
+        }
         formToFill.fillCredentials(this, callback)
     }
 
@@ -90,14 +87,12 @@ class OreoAutofillService : AutofillService() {
             callback.onFailure(getString(R.string.oreo_autofill_save_passwords_dont_match))
             return
         }
-        // Do not store masked passwords
-        if (password.all { it == '*' || it == '•' }) {
-            callback.onFailure(getString(R.string.oreo_autofill_save_invalid_password))
-            return
-        }
-        val credentials = Credentials(username, password)
         callback.onSuccess(
-            AutofillSaveActivity.makeSaveIntentSender(this, credentials, formOrigin = formOrigin)
+            AutofillSaveActivity.makeSaveIntentSender(
+                this,
+                credentials = Credentials(username, password),
+                formOrigin = formOrigin
+            )
         )
     }
 }

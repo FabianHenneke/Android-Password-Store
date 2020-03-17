@@ -18,7 +18,9 @@ enum class CertaintyLevel {
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-class FormField(node: AssistStructure.ViewNode, private val index: Int) {
+class FormField(node: AssistStructure.ViewNode, private val index: Int, private val passDownWebViewOrigins: Boolean, private val passedDownWebOrigin: String? = null) {
+
+    constructor(node: AssistStructure.ViewNode, index: Int, inheritedWebOrigin: String?): this(node, index, true, inheritedWebOrigin)
 
     companion object {
 
@@ -40,6 +42,8 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int) {
             "android.support.v7.widget.AppCompatEditText",
             "com.google.android.material.textfield.TextInputEditText"
         )
+
+        private val ANDROID_WEB_VIEW_CLASS_NAME = "android.webkit.WebView"
 
         private fun isPasswordInputType(inputType: Int): Boolean {
             val typeClass = inputType and InputType.TYPE_MASK_CLASS
@@ -93,7 +97,14 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int) {
 
     // Information for advanced heuristics taking multiple fields and page context into account
     val isFocused = node.isFocused
-    val webOrigin = node.webOrigin
+    // The webOrigin of a WebView should be passed down to its children in certain browsers
+    val isWebView = node.className == ANDROID_WEB_VIEW_CLASS_NAME
+    val webOrigin = node.webOrigin ?: if (passDownWebViewOrigins) passedDownWebOrigin else null
+    val webOriginToPassDown = if (passDownWebViewOrigins) {
+        if (isWebView) webOrigin else passedDownWebOrigin
+    } else {
+        null
+    }
 
     // Basic type detection for HTML fields
     private val htmlTag = node.htmlInfo?.tag
