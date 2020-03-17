@@ -1,3 +1,7 @@
+/*
+ * Copyright © 2014-2020 The Android Password Store Authors. All Rights Reserved.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.content.Context
@@ -97,8 +101,10 @@ class AutofillMatcher {
 
         fun addMatchFor(context: Context, formOrigin: FormOrigin, file: File) {
             if (!file.exists()) return
-            // FIXME
             if (hasFormOriginHashChanged(context, formOrigin)) {
+                // This should never happen since we already verified the publisher in
+                // getMatchesFor.
+                e { "App publisher changed between getMatchesFor and addMatchFor" }
                 throw AutofillPublisherChangedException(context.getString(R.string.oreo_autofill_publisher_changed))
             }
             val matchPreferences = context.matchPreferences(formOrigin)
@@ -120,35 +126,27 @@ class AutofillMatcher {
             d { "Stored match for $formOrigin" }
         }
 
-        // FIXME: Moving folders?
-        fun updateMatchesFor(context: Context, file: File, newFile: File) {
-            val oldPath = file.absolutePath
-            val newPath = newFile.absolutePath
+        fun updateMatchesFor(context: Context, sourceDestinationMap: Map<File, File>) {
+            val oldNewPathMap = sourceDestinationMap.mapValues { it.value.absolutePath }
+                .mapKeys { it.key.absolutePath }
             for (prefs in listOf(context.autofillAppMatches, context.autofillWebMatches)) {
                 for ((key, value) in prefs.all) {
                     if (!key.startsWith(PREFERENCE_PREFIX_MATCHES)) continue
-                    val matches = value as? MutableSet<String>
-                    if (matches == null) {
+                    val oldMatches = value as? Set<String>
+                    if (oldMatches == null) {
                         w { "Failed to read matches for $key" }
                         continue
                     }
-                    var shouldCommit = false
-                    if (newPath in matches) {
-                        matches.remove(newPath)
-                        shouldCommit = true
-                        i { "Overwriting match for $key: $newPath" }
-                    }
-                    if (oldPath in matches) {
-                        matches.remove(oldPath)
-                        matches.add(newPath)
-                        shouldCommit = true
-                        i { "Updating match for $key: $oldPath --> $newPath" }
-                    }
-                    if (shouldCommit) {
-                        prefs.edit(commit = true) {
-                            putStringSet(key, matches)
-                        }
-                    }
+                    // Delete all matches for file locations that are going to be overwritten, then
+                    // transfer matches over to the files at their new locations.
+                    val newMatches =
+                        oldMatches.asSequence().minus(oldNewPathMap.values).map { match ->
+                            val newPath = oldNewPathMap[match] ?: return@map match
+                            d { "Updating match for $key: $match --> $newPath" }
+                            newPath
+                        }.toSet()
+                    if (newMatches != oldMatches)
+                        prefs.edit { putStringSet(key, newMatches) }
                 }
             }
         }

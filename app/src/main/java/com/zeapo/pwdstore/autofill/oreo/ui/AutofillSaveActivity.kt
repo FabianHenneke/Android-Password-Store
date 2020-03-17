@@ -1,3 +1,7 @@
+/*
+ * Copyright © 2014-2020 The Android Password Store Authors. All Rights Reserved.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
 package com.zeapo.pwdstore.autofill.oreo.ui
 
 import android.app.Activity
@@ -101,8 +105,6 @@ class AutofillSaveActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == PasswordStore.REQUEST_CODE_ENCRYPT && resultCode == RESULT_OK && data != null) {
-            d { data.extras?.keySet()?.joinToString() ?: "" }
-            d { formOrigin?.identifier ?: "no formOrigin" }
             val createdPath = data.getStringExtra("CREATED_FILE")
             if (createdPath != null) {
                 formOrigin?.let {

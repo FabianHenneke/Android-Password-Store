@@ -1,3 +1,7 @@
+/*
+ * Copyright © 2014-2020 The Android Password Store Authors. All Rights Reserved.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.app.assist.AssistStructure
@@ -13,6 +17,12 @@ enum class AutofillAction {
     Match, Search, Generate
 }
 
+/**
+ * Represents a set of form fields with associated roles (e.g., username or new password) and
+ * contains the logic that decides which fields should be filled or saved. The type [T] is one of
+ * [FormField], [AssistStructure.ViewNode] or [AutofillId], depending on how much metadata about the
+ * field is needed and available in the particular situation.
+ */
 @RequiresApi(Build.VERSION_CODES.O)
 sealed class AutofillScenario<out T: Any>() {
     abstract val username: T?
@@ -134,6 +144,18 @@ sealed class AutofillScenario<out T: Any>() {
     }
 }
 
+fun AutofillScenario<FormField>.passesOriginCheck(singleOriginMode: Boolean): Boolean {
+    return if (singleOriginMode) {
+        // In single origin mode, only the browsers URL bar (which is never filled) should have
+        // a webOrigin.
+        allFields.all { it.webOrigin == null }
+    } else {
+        // In apps or browsers in multi origin mode, every field in a dataset has to belong to
+        // the same (possibly null) origin.
+        allFields.map { it.webOrigin }.toSet().size == 1
+    }
+}
+
 @RequiresApi(Build.VERSION_CODES.O)
 @JvmName("fillWithAutofillId")
 fun Dataset.Builder.fillWith(
@@ -241,5 +263,6 @@ val AutofillScenario<AssistStructure.ViewNode>.passwordValue: String?
                 null
             }
         }.toSet()
+        // Only return a non-null password value when all password fields agree
         return distinctValues.singleOrNull()
     }

@@ -1,3 +1,7 @@
+/*
+ * Copyright © 2014-2020 The Android Password Store Authors. All Rights Reserved.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.os.Build
@@ -49,7 +53,7 @@ class OreoAutofillService : AutofillService() {
         val isManualRequest =
             request.flags and FillRequest.FLAG_MANUAL_REQUEST == FillRequest.FLAG_MANUAL_REQUEST
         val formToFill =
-            FillableForm.parseAssistStructure(this, structure, isManualRequest) ?: run {
+            FillableForm.parseAssistStructure(this, structure) ?: run {
                 d { "Form cannot be filled" }
                 callback.onSuccess(null)
                 return

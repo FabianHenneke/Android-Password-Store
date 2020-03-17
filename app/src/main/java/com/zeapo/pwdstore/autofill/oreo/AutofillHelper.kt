@@ -1,3 +1,7 @@
+/*
+ * Copyright © 2014-2020 The Android Password Store Authors. All Rights Reserved.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.app.assist.AssistStructure
@@ -50,8 +54,7 @@ fun computeCertificatesHash(context: Context, packageName: String): String {
         val stableHashNew = stableHash(signaturesNew.map { it.toByteArray() })
         if (stableHashNew != stableHashOld) tag("CertificatesHash").e { "Mismatch between old and new hash: $stableHashNew != $stableHashOld" }
     }
-    // FIXME
-    return if (Random.nextBoolean()) stableHashOld else stableHashOld + "fake"
+    return stableHashOld
 }
 
 

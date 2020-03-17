@@ -1,3 +1,7 @@
+/*
+ * Copyright © 2014-2020 The Android Password Store Authors. All Rights Reserved.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.app.assist.AssistStructure
@@ -23,47 +27,6 @@ import com.zeapo.pwdstore.autofill.oreo.ui.AutofillPublisherChangedActivity
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillSaveActivity
 import java.io.File
 
-private val AUTOFILL_BROWSERS = listOf(
-    "org.mozilla.focus", "org.mozilla.klar", "com.duckduckgo.mobile.android"
-)
-private val ACCESSIBILITY_BROWSERS = listOf(
-    "org.mozilla.firefox",
-    "org.mozilla.firefox_beta",
-    "com.microsoft.emmx",
-    "com.android.chrome",
-    "com.chrome.beta",
-    "com.android.browser",
-    "com.brave.browser",
-    "com.opera.browser",
-    "com.opera.browser.beta",
-    "com.opera.mini.native",
-    "com.chrome.dev",
-    "com.chrome.canary",
-    "com.google.android.apps.chrome",
-    "com.google.android.apps.chrome_dev",
-    "com.yandex.browser",
-    "com.sec.android.app.sbrowser",
-    "com.sec.android.app.sbrowser.beta",
-    "org.codeaurora.swe.browser",
-    "com.amazon.cloud9",
-    "mark.via.gp",
-    "org.bromite.bromite",
-    "org.chromium.chrome",
-    "com.kiwibrowser.browser",
-    "com.ecosia.android",
-    "com.opera.mini.native.beta",
-    "org.mozilla.fennec_aurora",
-    "org.mozilla.fennec_fdroid",
-    "com.qwant.liberty",
-    "com.opera.touch",
-    "org.mozilla.fenix",
-    "org.mozilla.fenix.nightly",
-    "org.mozilla.reference.browser",
-    "org.mozilla.rocket",
-    "org.torproject.torbrowser",
-    "com.vivaldi.browser"
-)
-private val ALL_BROWSERS = AUTOFILL_BROWSERS + ACCESSIBILITY_BROWSERS
 
 sealed class FormOrigin(open val identifier: String) {
     data class Web(override val identifier: String) : FormOrigin(identifier)
@@ -101,10 +64,7 @@ sealed class FormOrigin(open val identifier: String) {
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-// FIXME: Use manual request?
-private class Form(
-    context: Context, structure: AssistStructure, private val isManualRequest: Boolean
-) {
+private class Form(context: Context, structure: AssistStructure) {
 
     companion object {
         private val SUPPORTED_SCHEMES = listOf("http", "https")
@@ -116,18 +76,14 @@ private class Form(
 
     private var appPackage = structure.activityComponent.packageName
 
-    // FIXME
-    //    private val isBrowser = isTrustedBrowser(context, packageName)
-    private val isBrowser = appPackage in ALL_BROWSERS
+    private val isBrowser = isTrustedBrowser(context, appPackage)
 
-    // FIXME
-    //    private val isBrowserSupportingSave = isBrowser && isBrowserWithSaveSupport(packageName)
-    private val isBrowserSupportingSave = isBrowser
+    private val isBrowserSupportingSave = isBrowser && isBrowserWithSaveSupport(appPackage)
     private val isBrowserSupportingMultiOrigin =
         isBrowser && isBrowserWithMultiOriginSupport(appPackage)
     private val singleOriginMode = isBrowser && !isBrowserSupportingMultiOrigin
 
-    private val webOrigins = mutableListOf<String>()
+    private val webOrigins = mutableSetOf<String>()
 
     init {
         d { "Request from $appPackage (${computeCertificatesHash(context, appPackage)})" }
@@ -135,15 +91,6 @@ private class Form(
     }
 
     val scenario = detectFieldsToFill()
-
-    init {
-        d { "Username field: ${scenario?.username}" }
-        d { "Will fill username: ${scenario?.fillUsername}" }
-        d { "Generic password field(s): ${(scenario as? GenericAutofillScenario)?.genericPassword}" }
-        d { "Current password field(s): ${(scenario as? ClassifiedAutofillScenario)?.currentPassword}" }
-        d { "New password field(s): ${(scenario as? ClassifiedAutofillScenario)?.newPassword}" }
-    }
-
     val formOrigin = determineFormOrigin()
 
     init {
@@ -151,24 +98,24 @@ private class Form(
     }
 
     val originSupportsSave = formOrigin != null && (!isBrowser || isBrowserSupportingSave)
+    val saveFlags = getBrowserSaveFlag(appPackage)
 
     private fun parseStructure(structure: AssistStructure) = visitViewNodes(structure) { node ->
         trackOrigin(node)
         val field = FormField(node, fieldIndex)
-        // FIXME: Improve origin detection by considering iframes and restricting to the list returned by adb shell settings get global autofill_compat_mode_allowed_packages
-        // FIXME: WebView?
         if (field.isFillable || field.isSaveable) {
             d { "$field" }
             relevantFields.add(field)
             fieldIndex++
         } else {
-            d { "Found irrelevant field: $field" }
+//            d { "Found irrelevant field: $field" }
             ignoredIds.add(field.autofillId)
         }
     }
 
     private fun detectFieldsToFill() = autofillStrategy.apply(relevantFields, singleOriginMode)
 
+    // TODO: Separately track WebView origins and verify Digital Asset Links
     private fun trackOrigin(node: AssistStructure.ViewNode) {
         if (!isBrowser) return
         node.webOrigin?.let {
@@ -205,12 +152,10 @@ private class Form(
             // origins elsewhere in the AssistStructure, the situation is uncertain and Autofill
             // should not be offered.
             webOriginToFormOrigin(
-                scenario.allFields.map { it.webOrigin }.singleOrNull() ?: return null
+                scenario.allFields.map { it.webOrigin }.toSet().singleOrNull() ?: return null
             )
         }
     }
-
-
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -218,28 +163,31 @@ class FillableForm private constructor(
     private val formOrigin: FormOrigin,
     private val scenario: AutofillScenario<FormField>,
     private val ignoredIds: List<AutofillId>,
-    private val originSupportsSave: Boolean
+    originSupportsSave: Boolean,
+    private val saveFlags: Int
 ) {
     companion object {
         fun makeFillInDataset(
             context: Context, credentials: Credentials, clientState: Bundle, action: AutofillAction
         ): Dataset {
             val remoteView = makePlaceholderRemoteView(context)
-            // FIXME
-            val scenario = AutofillScenario.fromBundle(clientState)!!
+            val scenario = AutofillScenario.fromBundle(clientState)
             return Dataset.Builder(remoteView).run {
-                fillWith(scenario, action, credentials)
+                if (scenario != null) fillWith(scenario, action, credentials)
+                else e { "Failed to recover scenario from client state" }
                 build()
             }
         }
 
-        fun parseAssistStructure(
-            context: Context, structure: AssistStructure, isManualRequest: Boolean
-        ): FillableForm? {
-            val form = Form(context, structure, isManualRequest)
+        fun parseAssistStructure(context: Context, structure: AssistStructure): FillableForm? {
+            val form = Form(context, structure)
             if (form.formOrigin == null || form.scenario == null) return null
             return FillableForm(
-                form.formOrigin, form.scenario, form.ignoredIds, form.originSupportsSave
+                form.formOrigin,
+                form.scenario,
+                form.ignoredIds,
+                form.originSupportsSave,
+                form.saveFlags
             )
         }
     }
@@ -316,9 +264,11 @@ class FillableForm private constructor(
         if (scenario.username != null) {
             saveDataTypes = saveDataTypes or SaveInfo.SAVE_DATA_TYPE_USERNAME
         }
-        return SaveInfo.Builder(saveDataTypes, idsToSave).build()
+        return SaveInfo.Builder(saveDataTypes, idsToSave).run {
+            setFlags(saveFlags)
+            build()
+        }
     }
-
 
     private fun makeFillResponse(context: Context, matchedFiles: List<File>): FillResponse? {
         var hasDataset = false

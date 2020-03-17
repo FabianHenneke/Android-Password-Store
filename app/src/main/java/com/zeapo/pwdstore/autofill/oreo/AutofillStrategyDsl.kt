@@ -1,8 +1,13 @@
+/*
+ * Copyright © 2014-2020 The Android Password Store Authors. All Rights Reserved.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.os.Build
 import androidx.annotation.RequiresApi
 import com.github.ajalt.timberkt.d
+import com.github.ajalt.timberkt.w
 
 @DslMarker
 annotation class AutofillDsl
@@ -83,7 +88,7 @@ class SingleFieldMatcher(
     }
 
     override fun match(fields: List<FormField>, alreadyMatched: List<FormField>): List<FormField>? {
-        fields.filter { take(it, alreadyMatched) }.let { contestants ->
+        return fields.filter { take(it, alreadyMatched) }.let { contestants ->
             var current = contestants
             for (tieBreaker in tieBreakers) {
                 // Successively filter matched fields via tie breakers...
@@ -91,10 +96,10 @@ class SingleFieldMatcher(
                 // skipping those tie breakers that are not satisfied for any remaining field...
                 if (new.isEmpty()) continue
                 // and return if the available options have been narrowed to a single field.
-                if (new.size == 1) return listOf(new.single())
+                if (new.size == 1) break
                 current = new
             }
-            return null
+            listOf(current.singleOrNull() ?: return null)
         }
     }
 }
@@ -106,16 +111,16 @@ class PairOfFieldsMatcher(
 ) : FieldMatcher {
 
     override fun match(fields: List<FormField>, alreadyMatched: List<FormField>): List<FormField>? {
-        fields.zipWithNext().filter { it.first directlyPrecedes it.second }
+        return fields.zipWithNext().filter { it.first directlyPrecedes it.second }
             .filter { take(it, alreadyMatched) }.let { contestants ->
                 var current = contestants
                 for (tieBreaker in tieBreakers) {
                     val new = current.filter { tieBreaker(it) }
                     if (new.isEmpty()) continue
-                    if (new.size == 1) return new.single().toList()
+                    if (new.size == 1) break
                     current = new
                 }
-                return null
+                current.singleOrNull()?.toList()
             }
     }
 }
@@ -123,7 +128,9 @@ class PairOfFieldsMatcher(
 
 @RequiresApi(Build.VERSION_CODES.O)
 class AutofillRule private constructor(
-    private val matchers: List<AutofillRuleMatcher>, private val applyInSingleOriginMode: Boolean
+    private val matchers: List<AutofillRuleMatcher>,
+    private val applyInSingleOriginMode: Boolean,
+    private val name: String
 ) {
 
     data class AutofillRuleMatcher(
@@ -136,7 +143,12 @@ class AutofillRule private constructor(
 
     @AutofillDsl
     class Builder(private val applyInSingleOriginMode: Boolean) {
+        companion object {
+            private var ruleId = 1
+        }
+
         private val matchers = mutableListOf<AutofillRuleMatcher>()
+        var name: String? = null
 
         fun username(optional: Boolean = false, block: SingleFieldMatcher.Builder.() -> Unit) {
             require(matchers.none { it.type == FillableFieldType.Username }) { "Every rule block can only have at most one username block" }
@@ -191,25 +203,9 @@ class AutofillRule private constructor(
                 require(matchers.none { it.matcher is PairOfFieldsMatcher }) { "Rules with applyInSingleOriginMode set to true must only match single fields" }
                 require(matchers.filter { it.type != FillableFieldType.Username }.size <= 1) { "Rules with applyInSingleOriginMode set to true must only match at most one password field" }
             }
-            return AutofillRule(matchers, applyInSingleOriginMode)
-        }
-    }
-
-    // FIXME
-    private fun passesOriginCheck(
-        scenario: AutofillScenario<FormField>, singleOriginMode: Boolean
-    ): Boolean {
-        return if (singleOriginMode) {
-            // In single origin mode, only the browsers URL bar (which is never filled) should have
-            // a webOrigin.
-            scenario.allFields.all { it.webOrigin == null }
-        } else {
-            // In apps or browsers in multi origin mode, every field in a dataset has to belong to
-            // the same (possibly null) origin.
-            scenario.allFields.map { it.webOrigin }.toSet().size == 1
-        }.also {
-            // FIXME
-            if (!it) d { "Rule failed origin check" }
+            return AutofillRule(
+                matchers, applyInSingleOriginMode, name ?: "Rule #$ruleId"
+            ).also { ruleId++ }
         }
     }
 
@@ -223,7 +219,14 @@ class AutofillRule private constructor(
             val matchResult = when (type) {
                 FillableFieldType.Username -> matcher.match(allUsername, alreadyMatched)
                 else -> matcher.match(allPassword, alreadyMatched)
-            } ?: if (optional) continue else return null
+            } ?: if (optional) {
+                d { "$name: Skipping optional $type matcher" }
+                continue
+            } else {
+                d { "$name: Required $type matcher didn't match; passing to next rule" }
+                return null
+            }
+            d { "$name: Matched $type" }
             when (type) {
                 FillableFieldType.Username -> {
                     check(matchResult.size == 1 && scenarioBuilder.username == null)
@@ -241,8 +244,14 @@ class AutofillRule private constructor(
             }
             alreadyMatched.addAll(matchResult)
         }
-        return scenarioBuilder.build().takeIf {
-            passesOriginCheck(it, singleOriginMode = singleOriginMode)
+        return scenarioBuilder.build().takeIf { scenario ->
+            scenario.passesOriginCheck(singleOriginMode = singleOriginMode).also { passed ->
+                if (passed) {
+                    d { "$name: Detected scenario:\n$scenario" }
+                } else {
+                    w { "$name: Scenario failed origin check:\n$scenario" }
+                }
+            }
         }
     }
 }
@@ -256,7 +265,9 @@ class AutofillStrategy(private val rules: List<AutofillRule>) {
 
         fun rule(
             applyInSingleOriginMode: Boolean = false, block: AutofillRule.Builder.() -> Unit
-        ) = AutofillRule.Builder(applyInSingleOriginMode).apply(block).build()
+        ) {
+            rules.add(AutofillRule.Builder(applyInSingleOriginMode).apply(block).build())
+        }
 
         fun build() = AutofillStrategy(rules)
     }
@@ -264,9 +275,12 @@ class AutofillStrategy(private val rules: List<AutofillRule>) {
     fun apply(fields: List<FormField>, multiOriginSupport: Boolean): AutofillScenario<FormField>? {
         val possiblePasswordFields =
             fields.filter { it.passwordCertainty >= CertaintyLevel.Possible }
+        d { "Possible password fields: ${possiblePasswordFields.size}" }
         val possibleUsernameFields =
             fields.filter { it.usernameCertainty >= CertaintyLevel.Possible }
+        d { "Possible username fields: ${possibleUsernameFields.size}" }
         // Return the result of the first rule that matches
+        d { "Rules: ${rules.size}" }
         for (rule in rules) {
             return rule.apply(possiblePasswordFields, possibleUsernameFields, multiOriginSupport)
                 ?: continue

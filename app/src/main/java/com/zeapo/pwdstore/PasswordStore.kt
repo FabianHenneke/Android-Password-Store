@@ -651,11 +651,21 @@ class PasswordStore : AppCompatActivity() {
                                     .setPositiveButton("Okay", null)
                                     .show()
                         }
+                        val sourceDestinationMap: Map<File, File> = if (source.isDirectory) {
+                            check(destinationFile.isDirectory) { "Moving a directory to a file" }
+                            // Recursively list all files (not directories) below `source`, then
+                            // obtain the corresponding target file by resolving the relative path
+                            // starting at the destination folder.
+                            val sourceFiles = FileUtils.listFiles(source, null, true)
+                            sourceFiles.associateWith { destinationFile.resolve(it.relativeTo(source)) }
+                        } else {
+                            mapOf(source to destinationFile)
+                        }
                         if (!source.renameTo(destinationFile)) {
                             // TODO this should show a warning to the user
                             Timber.tag(TAG).e("Something went wrong while moving.")
                         } else {
-                            AutofillMatcher.updateMatchesFor(this, source, destinationFile)
+                            AutofillMatcher.updateMatchesFor(this, sourceDestinationMap)
                             commitChange(this.resources
                                     .getString(
                                             R.string.git_commit_move_text,

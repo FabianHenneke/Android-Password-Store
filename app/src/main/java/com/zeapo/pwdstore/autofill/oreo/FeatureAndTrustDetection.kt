@@ -1,6 +1,13 @@
+/*
+ * Copyright © 2014-2020 The Android Password Store Authors. All Rights Reserved.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.content.Context
+import android.os.Build
+import android.service.autofill.SaveInfo
+import androidx.annotation.RequiresApi
 
 /*
     In order to add a new browser, do the following:
@@ -38,11 +45,13 @@ import android.content.Context
     You can use https://fabianhenneke.github.io/Android-Password-Store/ as a test form.
  */
 
-// **Security assumption**:
-// Browsers on this list correctly report the web origin of the top-level window as part of their
-// AssistStructure.
-// Note: Browsers can be on this list even if they don't report the correct web origins of all
-// fields on the page, e.g. of those in iframes.
+/*
+ * **Security assumption**: Browsers on this list correctly report the web origin of the top-level
+ * window as part of their AssistStructure.
+ *
+ * Note: Browsers can be on this list even if they don't report the correct web origins of all
+ * fields on the page, e.g. of those in iframes.
+ */
 private val TRUSTED_BROWSER_CERTIFICATE_HASH = mapOf(
     "com.android.chrome" to "8P1sW0EPJcslw7UzRsiXL64w+O50Ed+RBICtay1g24M=",
     "com.brave.browser" to "nC23BRNRX9v7vFhbPt89cSPU3GfJT/0wY2HB15u/GKw=",
@@ -57,33 +66,36 @@ private val TRUSTED_BROWSER_CERTIFICATE_HASH = mapOf(
     "org.torproject.torbrowser" to "IAYfBF5zfGc3XBd5TP7bQ2oDzsa6y3y5+WZCIFyizsg="
 )
 
-fun isTrustedBrowser(context: Context, packageName: String): Boolean {
-    val expectedCertificateHash = TRUSTED_BROWSER_CERTIFICATE_HASH[packageName] ?: return false
-    val certificateHash = computeCertificatesHash(context, packageName)
+fun isTrustedBrowser(context: Context, appPackage: String): Boolean {
+    val expectedCertificateHash = TRUSTED_BROWSER_CERTIFICATE_HASH[appPackage] ?: return false
+    val certificateHash = computeCertificatesHash(context, appPackage)
     return certificateHash == expectedCertificateHash
 }
 
-private val BROWSERS_WITH_SAVE_SUPPORT = listOf(
-    // Add known incompatible browsers here so that they can be revisited from time to time
-    // "com.android.chrome": currently only provides masked passwords
-    // "com.brave.browser": currently only provides masked passwords
+@RequiresApi(Build.VERSION_CODES.O)
+private val BROWSERS_WITH_SAVE_SUPPORT = mapOf<String, Int>(
     // "org.torproject.torbrowser": no save request
-    "com.duckduckgo.mobile.android",
-    "org.mozilla.klar",
-    "org.mozilla.focus",
-    "org.mozilla.fenix",
-    "org.mozilla.fenix.nightly",
-    "org.mozilla.fennec_aurora"
+    "com.duckduckgo.mobile.android" to SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE,
+    "org.mozilla.klar" to 0,
+    "org.mozilla.focus" to 0,
+    "org.mozilla.fenix" to 0,
+    "org.mozilla.fenix.nightly" to 0,
+    "org.mozilla.fennec_aurora" to 0
 )
 
-fun isBrowserWithSaveSupport(packageName: String): Boolean {
-    return packageName in BROWSERS_WITH_SAVE_SUPPORT
+fun isBrowserWithSaveSupport(appPackage: String): Boolean {
+    return appPackage in BROWSERS_WITH_SAVE_SUPPORT
 }
 
-// **Security assumption**:
-// Browsers on this list correctly distinguish the web origins of form fields, e.g. on a page which
-// contains both a first-party login form and an iframe with a (potentially malicious) third-party
-// login form.
+fun getBrowserSaveFlag(appPackage: String): Int {
+    return BROWSERS_WITH_SAVE_SUPPORT[appPackage] ?: 0
+}
+
+/**
+ * **Security assumption**: Browsers on this list correctly distinguish the web origins of form
+ * fields, e.g. on a page which contains both a first-party login form and an iframe with a
+ * (potentially malicious) third-party login form.
+ */
 private val BROWSERS_WITH_MULTI_ORIGIN_SUPPORT = listOf(
     "com.duckduckgo.mobile.android",
     "org.mozilla.klar",
@@ -96,6 +108,6 @@ private val BROWSERS_WITH_MULTI_ORIGIN_SUPPORT = listOf(
     "org.torproject.torbrowser"
 )
 
-fun isBrowserWithMultiOriginSupport(packageName: String): Boolean {
-    return packageName in BROWSERS_WITH_MULTI_ORIGIN_SUPPORT
+fun isBrowserWithMultiOriginSupport(appPackage: String): Boolean {
+    return appPackage in BROWSERS_WITH_MULTI_ORIGIN_SUPPORT
 }
