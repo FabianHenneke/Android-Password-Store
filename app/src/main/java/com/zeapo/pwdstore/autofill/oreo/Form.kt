@@ -286,7 +286,6 @@ class FillableForm private constructor(
         val idsToSave = scenario.fieldsToSave.map { it.autofillId }.toTypedArray()
         if (idsToSave.isEmpty()) return null
         var saveDataTypes = SaveInfo.SAVE_DATA_TYPE_PASSWORD
-        // FIXME: Can we always save the username? It may mean moving a file...
         if (scenario.username != null) {
             saveDataTypes = saveDataTypes or SaveInfo.SAVE_DATA_TYPE_USERNAME
         }

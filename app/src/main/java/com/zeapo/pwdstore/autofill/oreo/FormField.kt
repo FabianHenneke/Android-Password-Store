@@ -113,7 +113,6 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int, private 
             ?.associate { Pair(it.first.toLowerCase(Locale.US), it.second.toLowerCase(Locale.US)) }
             ?: emptyMap()
 
-    // FIXME
     private val htmlAttributesDebug =
         htmlAttributes.entries.joinToString { "${it.key}=${it.value}" }
     private val htmlInputType = htmlAttributes["type"]
