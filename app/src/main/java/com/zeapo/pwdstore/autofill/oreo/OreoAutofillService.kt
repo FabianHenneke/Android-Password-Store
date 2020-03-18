@@ -38,7 +38,9 @@ class OreoAutofillService : AutofillService() {
     }
 
     override fun onFillRequest(
-        request: FillRequest, cancellationSignal: CancellationSignal, callback: FillCallback
+        request: FillRequest,
+        cancellationSignal: CancellationSignal,
+        callback: FillCallback
     ) {
         val structure = request.fillContexts.lastOrNull()?.structure ?: run {
             callback.onSuccess(null)

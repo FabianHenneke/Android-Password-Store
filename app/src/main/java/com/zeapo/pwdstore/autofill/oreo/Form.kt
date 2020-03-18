@@ -202,7 +202,10 @@ class FillableForm private constructor(
 ) {
     companion object {
         fun makeFillInDataset(
-            context: Context, credentials: Credentials, clientState: Bundle, action: AutofillAction
+            context: Context,
+            credentials: Credentials,
+            clientState: Bundle,
+            action: AutofillAction
         ): Dataset {
             val remoteView = makePlaceholderRemoteView(context)
             val scenario = AutofillScenario.fromBundle(clientState)
@@ -239,7 +242,9 @@ class FillableForm private constructor(
     private val canBeSaved = originSupportsSave && scenarioSupportsSave
 
     private fun makePlaceholderDataset(
-        remoteView: RemoteViews, intentSender: IntentSender, action: AutofillAction
+        remoteView: RemoteViews,
+        intentSender: IntentSender,
+        action: AutofillAction
     ): Dataset {
         return Dataset.Builder(remoteView).run {
             fillWith(scenario, action, credentials = null)
@@ -271,7 +276,8 @@ class FillableForm private constructor(
     }
 
     private fun makePublisherChangedDataset(
-        context: Context, publisherChangedException: AutofillPublisherChangedException
+        context: Context,
+        publisherChangedException: AutofillPublisherChangedException
     ): Dataset {
         val remoteView = makeWarningRemoteView(context)
         val intentSender = AutofillPublisherChangedActivity.makePublisherChangedIntentSender(
@@ -281,7 +287,8 @@ class FillableForm private constructor(
     }
 
     private fun makePublisherChangedResponse(
-        context: Context, publisherChangedException: AutofillPublisherChangedException
+        context: Context,
+        publisherChangedException: AutofillPublisherChangedException
     ): FillResponse {
         return FillResponse.Builder().run {
             addDataset(makePublisherChangedDataset(context, publisherChangedException))

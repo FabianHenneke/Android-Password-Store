@@ -1,8 +1,4 @@
 /*
- * Copyright © 2014-2019 The Android Password Store Authors. All Rights Reserved.
- * SPDX-License-Identifier: GPL-3.0-only
- */
-/*
  * Copyright © 2014-2020 The Android Password Store Authors. All Rights Reserved.
  * SPDX-License-Identifier: GPL-3.0-only
  */
@@ -36,7 +32,8 @@ class AutofillPublisherChangedActivity : AppCompatActivity() {
         private var publisherChangedRequestCode = 1
 
         fun makePublisherChangedIntentSender(
-            context: Context, publisherChangedException: AutofillPublisherChangedException
+            context: Context,
+            publisherChangedException: AutofillPublisherChangedException
         ): IntentSender {
             val intent = Intent(context, AutofillPublisherChangedActivity::class.java).apply {
                 putExtra(EXTRA_APP_PACKAGE, publisherChangedException.appPackage)
@@ -90,4 +87,3 @@ class AutofillPublisherChangedActivity : AppCompatActivity() {
         )
     }
 }
-

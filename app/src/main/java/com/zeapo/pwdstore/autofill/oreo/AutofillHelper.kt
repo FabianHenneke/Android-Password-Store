@@ -95,7 +95,10 @@ data class Credentials(val username: String?, val password: String) {
 }
 
 private fun makeRemoteView(
-    context: Context, title: String, summary: String, iconRes: Int
+    context: Context,
+    title: String,
+    summary: String,
+    iconRes: Int
 ): RemoteViews {
     return RemoteViews(context.packageName, R.layout.oreo_autofill_dataset).apply {
         setTextViewText(R.id.title, title)

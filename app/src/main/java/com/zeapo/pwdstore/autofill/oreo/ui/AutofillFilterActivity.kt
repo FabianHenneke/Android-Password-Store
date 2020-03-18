@@ -26,9 +26,9 @@ import com.zeapo.pwdstore.autofill.oreo.AutofillMatcher
 import com.zeapo.pwdstore.autofill.oreo.FormOrigin
 import com.zeapo.pwdstore.utils.PasswordItem
 import com.zeapo.pwdstore.utils.PasswordRepository
-import kotlinx.android.synthetic.main.activity_oreo_autofill_filter.*
 import java.io.File
 import java.util.Locale
+import kotlinx.android.synthetic.main.activity_oreo_autofill_filter.*
 
 @TargetApi(Build.VERSION_CODES.O)
 class AutofillFilterView : AppCompatActivity() {
@@ -197,4 +197,3 @@ class AutofillFilterView : AppCompatActivity() {
         }
     }
 }
-

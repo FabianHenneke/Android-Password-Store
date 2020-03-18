@@ -136,7 +136,9 @@ class AutofillRule private constructor(
 ) {
 
     data class AutofillRuleMatcher(
-        val type: FillableFieldType, val matcher: FieldMatcher, val optional: Boolean
+        val type: FillableFieldType,
+        val matcher: FieldMatcher,
+        val optional: Boolean
     )
 
     enum class FillableFieldType {
@@ -212,7 +214,9 @@ class AutofillRule private constructor(
     }
 
     fun apply(
-        allPassword: List<FormField>, allUsername: List<FormField>, singleOriginMode: Boolean
+        allPassword: List<FormField>,
+        allUsername: List<FormField>,
+        singleOriginMode: Boolean
     ): AutofillScenario<FormField>? {
         if (singleOriginMode && !applyInSingleOriginMode) {
             d { "$name: Skipped in single origin mode" }
@@ -269,7 +273,8 @@ class AutofillStrategy(private val rules: List<AutofillRule>) {
         private val rules: MutableList<AutofillRule> = mutableListOf()
 
         fun rule(
-            applyInSingleOriginMode: Boolean = false, block: AutofillRule.Builder.() -> Unit
+            applyInSingleOriginMode: Boolean = false,
+            block: AutofillRule.Builder.() -> Unit
         ) {
             rules.add(AutofillRule.Builder(applyInSingleOriginMode).apply(block).build())
         }
@@ -296,4 +301,3 @@ class AutofillStrategy(private val rules: List<AutofillRule>) {
 
 fun strategy(block: AutofillStrategy.Builder.() -> Unit) =
     AutofillStrategy.Builder().apply(block).build()
-

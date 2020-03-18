@@ -159,7 +159,9 @@ fun AutofillScenario<FormField>.passesOriginCheck(singleOriginMode: Boolean): Bo
 @RequiresApi(Build.VERSION_CODES.O)
 @JvmName("fillWithAutofillId")
 fun Dataset.Builder.fillWith(
-    scenario: AutofillScenario<AutofillId>, action: AutofillAction, credentials: Credentials?
+    scenario: AutofillScenario<AutofillId>,
+    action: AutofillAction,
+    credentials: Credentials?
 ) {
     val credentialsToFill = credentials ?: Credentials(
         "USERNAME",
@@ -178,7 +180,9 @@ fun Dataset.Builder.fillWith(
 @RequiresApi(Build.VERSION_CODES.O)
 @JvmName("fillWithFormField")
 fun Dataset.Builder.fillWith(
-    scenario: AutofillScenario<FormField>, action: AutofillAction, credentials: Credentials?
+    scenario: AutofillScenario<FormField>,
+    action: AutofillAction,
+    credentials: Credentials?
 ) {
     fillWith(scenario.map { it.autofillId }, action, credentials)
 }
@@ -193,7 +197,9 @@ data class ClassifiedAutofillScenario<T : Any>(
 
 @RequiresApi(Build.VERSION_CODES.O)
 data class GenericAutofillScenario<T : Any>(
-    override val username: T?, override val fillUsername: Boolean, val genericPassword: List<T>
+    override val username: T?,
+    override val fillUsername: Boolean,
+    val genericPassword: List<T>
 ) : AutofillScenario<T>()
 
 inline fun <T : Any, S : Any> AutofillScenario<T>.map(transform: (T) -> S): AutofillScenario<S> {
