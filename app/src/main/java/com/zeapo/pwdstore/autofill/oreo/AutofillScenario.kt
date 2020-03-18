@@ -25,8 +25,6 @@ enum class AutofillAction {
  */
 @RequiresApi(Build.VERSION_CODES.O)
 sealed class AutofillScenario<out T : Any> {
-    abstract val username: T?
-    abstract val fillUsername: Boolean
 
     companion object {
         const val BUNDLE_KEY_USERNAME_ID = "usernameId"
@@ -89,59 +87,77 @@ sealed class AutofillScenario<out T : Any> {
         }
     }
 
-    val allFields: List<T> by lazy {
-        listOfNotNull(username) + when (this) {
-            is ClassifiedAutofillScenario -> currentPassword + newPassword
-            is GenericAutofillScenario -> genericPassword
+    abstract val username: T?
+    abstract val fillUsername: Boolean
+    abstract val allPasswordFields: List<T>
+    abstract val passwordFieldsToFillOnMatch: List<T>
+    abstract val passwordFieldsToFillOnSearch: List<T>
+    abstract val passwordFieldsToFillOnGenerate: List<T>
+    abstract val passwordFieldsToSave: List<T>
+
+    val fieldsToSave: List<T>
+        get() = listOfNotNull(username) + passwordFieldsToSave
+
+    val allFields
+        get() = listOfNotNull(username) + allPasswordFields
+
+    fun fieldsToFillOn(action: AutofillAction): List<T> {
+        val passwordFieldsToFill = when (action) {
+            AutofillAction.Match -> passwordFieldsToFillOnMatch
+            AutofillAction.Search -> passwordFieldsToFillOnSearch
+            AutofillAction.Generate -> passwordFieldsToFillOnGenerate
         }
-    }
-
-    fun fieldsToFillOn(action: AutofillAction): List<T> = when (action) {
-        AutofillAction.Match -> fieldsToFillOnMatch
-        AutofillAction.Search -> fieldsToFillOnSearch
-        AutofillAction.Generate -> fieldsToFillOnGenerate
-    }
-
-    private val fieldsToFillOnMatch: List<T> by lazy {
-        listOfNotNull(username.takeIf { fillUsername }) + when (this) {
-            is ClassifiedAutofillScenario -> currentPassword
-            is GenericAutofillScenario -> {
-                if (genericPassword.size == 1) genericPassword
-                else emptyList()
+        return when {
+            passwordFieldsToFill.isNotEmpty() -> {
+                // If the current action would fill into any password field, we also fill into the
+                // username field if possible.
+                listOfNotNull(username.takeIf { fillUsername }) + passwordFieldsToFill
             }
-        }
-    }
-
-    private val fieldsToFillOnSearch: List<T> by lazy {
-        listOfNotNull(username.takeIf { fillUsername }) + when (this) {
-            is ClassifiedAutofillScenario -> currentPassword
-            is GenericAutofillScenario -> {
-                if (genericPassword.size == 1) genericPassword
-                else emptyList()
+            allPasswordFields.isEmpty() -> {
+                // If there no password fields at all, we still offer to fill the username, e.g. in
+                // two-step login scenarios.
+                listOfNotNull(username.takeIf { fillUsername })
             }
+            else -> emptyList()
         }
     }
+}
 
-    private val fieldsToFillOnGenerate: List<T> by lazy {
-        listOfNotNull(username.takeIf { fillUsername }) + when (this) {
-            is ClassifiedAutofillScenario -> newPassword
-            is GenericAutofillScenario -> genericPassword
-        }
-    }
+@RequiresApi(Build.VERSION_CODES.O)
+data class ClassifiedAutofillScenario<T : Any>(
+    override val username: T?,
+    override val fillUsername: Boolean,
+    val currentPassword: List<T>,
+    val newPassword: List<T>
+) : AutofillScenario<T>() {
+    override val allPasswordFields: List<T>
+        get() = currentPassword + newPassword
+    override val passwordFieldsToFillOnMatch: List<T>
+        get() = currentPassword
+    override val passwordFieldsToFillOnSearch: List<T>
+        get() = currentPassword
+    override val passwordFieldsToFillOnGenerate: List<T>
+        get() = newPassword
+    override val passwordFieldsToSave: List<T>
+        get() = if (newPassword.isNotEmpty()) newPassword else currentPassword
+}
 
-    val passwordFields: List<T> by lazy {
-        when (this) {
-            is ClassifiedAutofillScenario -> {
-                // Save only the new password if there are both new and current passwords
-                if (newPassword.isNotEmpty()) newPassword else currentPassword
-            }
-            is GenericAutofillScenario -> genericPassword
-        }
-    }
-
-    val fieldsToSave: List<T> by lazy {
-        listOfNotNull(username) + passwordFields
-    }
+@RequiresApi(Build.VERSION_CODES.O)
+data class GenericAutofillScenario<T : Any>(
+    override val username: T?,
+    override val fillUsername: Boolean,
+    val genericPassword: List<T>
+) : AutofillScenario<T>() {
+    override val allPasswordFields: List<T>
+        get() = genericPassword
+    override val passwordFieldsToFillOnMatch: List<T>
+        get() = if (genericPassword.size == 1) genericPassword else emptyList()
+    override val passwordFieldsToFillOnSearch: List<T>
+        get() = if (genericPassword.size == 1) genericPassword else emptyList()
+    override val passwordFieldsToFillOnGenerate: List<T>
+        get() = genericPassword
+    override val passwordFieldsToSave: List<T>
+        get() = genericPassword
 }
 
 fun AutofillScenario<FormField>.passesOriginCheck(singleOriginMode: Boolean): Boolean {
@@ -186,21 +202,6 @@ fun Dataset.Builder.fillWith(
 ) {
     fillWith(scenario.map { it.autofillId }, action, credentials)
 }
-
-@RequiresApi(Build.VERSION_CODES.O)
-data class ClassifiedAutofillScenario<T : Any>(
-    override val username: T?,
-    override val fillUsername: Boolean,
-    val currentPassword: List<T>,
-    val newPassword: List<T>
-) : AutofillScenario<T>()
-
-@RequiresApi(Build.VERSION_CODES.O)
-data class GenericAutofillScenario<T : Any>(
-    override val username: T?,
-    override val fillUsername: Boolean,
-    val genericPassword: List<T>
-) : AutofillScenario<T>()
 
 inline fun <T : Any, S : Any> AutofillScenario<T>.map(transform: (T) -> S): AutofillScenario<S> {
     val builder = AutofillScenario.Builder<S>()
@@ -262,7 +263,7 @@ val AutofillScenario<AssistStructure.ViewNode>.usernameValue: String?
     }
 val AutofillScenario<AssistStructure.ViewNode>.passwordValue: String?
     @RequiresApi(Build.VERSION_CODES.O) get() {
-        val distinctValues = passwordFields.map {
+        val distinctValues = passwordFieldsToSave.map {
             if (it.autofillValue?.isText == true) {
                 it.autofillValue?.textValue?.toString()
             } else {
