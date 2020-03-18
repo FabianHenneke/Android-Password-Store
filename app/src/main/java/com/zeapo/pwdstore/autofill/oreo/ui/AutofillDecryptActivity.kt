@@ -20,12 +20,22 @@ import com.zeapo.pwdstore.PasswordEntry
 import com.zeapo.pwdstore.autofill.oreo.AutofillAction
 import com.zeapo.pwdstore.autofill.oreo.Credentials
 import com.zeapo.pwdstore.autofill.oreo.FillableForm
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.msfjarvis.openpgpktx.util.OpenPgpApi
 import me.msfjarvis.openpgpktx.util.OpenPgpServiceConnection
 import org.openintents.openpgp.IOpenPgpService2
 import org.openintents.openpgp.OpenPgpError
-import java.io.*
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.InputStream
+import java.io.OutputStream
+import java.io.UnsupportedEncodingException
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -36,7 +46,8 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
 
     companion object {
         private const val EXTRA_FILE_PATH = "com.zeapo.pwdstore.autofill.oreo.EXTRA_FILE_PATH"
-        private const val EXTRA_SEARCH_ACTION = "com.zeapo.pwdstore.autofill.oreo.EXTRA_SEARCH_ACTION"
+        private const val EXTRA_SEARCH_ACTION =
+            "com.zeapo.pwdstore.autofill.oreo.EXTRA_SEARCH_ACTION"
         private const val REQUEST_CODE_CONTINUE_AFTER_USER_INTERACTION = 1
         private const val OPENPGP_PROVIDER = "org.sufficientlysecure.keychain"
 
@@ -90,7 +101,12 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
                 setResult(RESULT_CANCELED)
             } else {
                 val fillInDataset =
-                    FillableForm.makeFillInDataset(this@AutofillDecryptActivity, credentials, clientState, action)
+                    FillableForm.makeFillInDataset(
+                        this@AutofillDecryptActivity,
+                        credentials,
+                        clientState,
+                        action
+                    )
                 withContext(Dispatchers.Main) {
                     setResult(RESULT_OK, Intent().apply {
                         putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, fillInDataset)
@@ -219,5 +235,4 @@ class AutofillDecryptActivity : Activity(), CoroutineScope {
             continueAfterUserInteraction = null
         }
     }
-
 }

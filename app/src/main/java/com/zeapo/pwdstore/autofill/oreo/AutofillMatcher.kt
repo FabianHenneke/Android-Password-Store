@@ -10,7 +10,6 @@ import android.widget.Toast
 import androidx.core.content.edit
 import com.github.ajalt.timberkt.Timber.e
 import com.github.ajalt.timberkt.d
-import com.github.ajalt.timberkt.i
 import com.github.ajalt.timberkt.w
 import com.zeapo.pwdstore.R
 import java.io.File

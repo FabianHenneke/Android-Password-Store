@@ -10,7 +10,7 @@ import android.text.InputType
 import android.view.View
 import android.view.autofill.AutofillId
 import androidx.annotation.RequiresApi
-import java.util.*
+import java.util.Locale
 
 enum class CertaintyLevel {
     Impossible, Possible, Likely, Certain
@@ -21,7 +21,12 @@ enum class CertaintyLevel {
  * extracted from its [AssistStructure.ViewNode].
  */
 @RequiresApi(Build.VERSION_CODES.O)
-class FormField(node: AssistStructure.ViewNode, private val index: Int, passDownWebViewOrigins: Boolean, passedDownWebOrigin: String? = null) {
+class FormField(
+    node: AssistStructure.ViewNode,
+    private val index: Int,
+    passDownWebViewOrigins: Boolean,
+    passedDownWebOrigin: String? = null
+) {
 
     companion object {
 
@@ -98,6 +103,7 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int, passDown
 
     // Information for advanced heuristics taking multiple fields and page context into account
     val isFocused = node.isFocused
+
     // The webOrigin of a WebView should be passed down to its children in certain browsers
     val isWebView = node.className == ANDROID_WEB_VIEW_CLASS_NAME
     val webOrigin = node.webOrigin ?: if (passDownWebViewOrigins) passedDownWebOrigin else null

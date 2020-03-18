@@ -128,7 +128,6 @@ class PairOfFieldsMatcher(
     }
 }
 
-
 @RequiresApi(Build.VERSION_CODES.O)
 class AutofillRule private constructor(
     private val matchers: List<AutofillRuleMatcher>,
@@ -294,7 +293,6 @@ class AutofillStrategy(private val rules: List<AutofillRule>) {
         return null
     }
 }
-
 
 fun strategy(block: AutofillStrategy.Builder.() -> Unit) =
     AutofillStrategy.Builder().apply(block).build()

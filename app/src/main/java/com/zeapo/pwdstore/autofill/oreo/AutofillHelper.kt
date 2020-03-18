@@ -168,7 +168,10 @@ private fun visitViewNodes(structure: AssistStructure, block: (AssistStructure.V
     }
 }
 
-private fun visitViewNode(node: AssistStructure.ViewNode, block: (AssistStructure.ViewNode) -> Unit) {
+private fun visitViewNode(
+    node: AssistStructure.ViewNode,
+    block: (AssistStructure.ViewNode) -> Unit
+) {
     block(node)
     for (i in 0 until node.childCount) {
         visitViewNode(node.getChildAt(i), block)

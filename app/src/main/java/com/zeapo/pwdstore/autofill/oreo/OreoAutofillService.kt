@@ -6,7 +6,12 @@ package com.zeapo.pwdstore.autofill.oreo
 
 import android.os.Build
 import android.os.CancellationSignal
-import android.service.autofill.*
+import android.service.autofill.AutofillService
+import android.service.autofill.FillCallback
+import android.service.autofill.FillRequest
+import android.service.autofill.FillResponse
+import android.service.autofill.SaveCallback
+import android.service.autofill.SaveRequest
 import androidx.annotation.RequiresApi
 import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.e
