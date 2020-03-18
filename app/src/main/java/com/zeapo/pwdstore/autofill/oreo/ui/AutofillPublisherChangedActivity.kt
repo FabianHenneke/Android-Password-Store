@@ -36,7 +36,7 @@ class AutofillPublisherChangedActivity : AppCompatActivity() {
             publisherChangedException: AutofillPublisherChangedException
         ): IntentSender {
             val intent = Intent(context, AutofillPublisherChangedActivity::class.java).apply {
-                putExtra(EXTRA_APP_PACKAGE, publisherChangedException.appPackage)
+                putExtra(EXTRA_APP_PACKAGE, publisherChangedException.formOrigin.identifier)
             }
             return PendingIntent.getActivity(
                 context, publisherChangedRequestCode++, intent, PendingIntent.FLAG_CANCEL_CURRENT
@@ -72,18 +72,25 @@ class AutofillPublisherChangedActivity : AppCompatActivity() {
     }
 
     private fun showPackageInfo() {
-        val packageInfo = packageManager.getPackageInfo(appPackage, PackageManager.GET_META_DATA)
-        val installTime = DateUtils.getRelativeTimeSpanString(packageInfo.firstInstallTime)
-        warningAppInstallDate.text =
-            getString(R.string.oreo_autofill_warning_publisher_install_time, installTime)
-        val appInfo = packageManager.getApplicationInfo(appPackage, PackageManager.GET_META_DATA)
-        warningAppName.text = "“${packageManager.getApplicationLabel(appInfo)}”"
+        try {
+            val packageInfo =
+                packageManager.getPackageInfo(appPackage, PackageManager.GET_META_DATA)
+            val installTime = DateUtils.getRelativeTimeSpanString(packageInfo.firstInstallTime)
+            warningAppInstallDate.text =
+                getString(R.string.oreo_autofill_warning_publisher_install_time, installTime)
+            val appInfo =
+                packageManager.getApplicationInfo(appPackage, PackageManager.GET_META_DATA)
+            warningAppName.text = "“${packageManager.getApplicationLabel(appInfo)}”"
 
-        val currentHash = computeCertificatesHash(this, appPackage)
-        warningAppAdvancedInfo.text = getString(
-            R.string.oreo_autofill_warning_publisher_advanced_info_template,
-            appPackage,
-            currentHash
-        )
+            val currentHash = computeCertificatesHash(this, appPackage)
+            warningAppAdvancedInfo.text = getString(
+                R.string.oreo_autofill_warning_publisher_advanced_info_template,
+                appPackage,
+                currentHash
+            )
+        } catch (exception: Exception) {
+            e(exception) { "Failed to retrieve package info for $appPackage" }
+            finish()
+        }
     }
 }

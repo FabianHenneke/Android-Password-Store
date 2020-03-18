@@ -29,8 +29,12 @@ private fun Context.matchPreferences(formOrigin: FormOrigin): SharedPreferences 
     }
 }
 
-class AutofillPublisherChangedException(val appPackage: String) :
-    Exception("The publisher of '$appPackage' changed since an entry was first matched with this app")
+class AutofillPublisherChangedException(val formOrigin: FormOrigin) :
+    Exception("The publisher of '${formOrigin.identifier}' changed since an entry was first matched with this app") {
+    init {
+        require(formOrigin is FormOrigin.App)
+    }
+}
 
 /**
  * Manages "matches", i.e., associations between apps or websites and Password Store entries.
@@ -89,7 +93,7 @@ class AutofillMatcher {
          */
         fun getMatchesFor(context: Context, formOrigin: FormOrigin): List<File> {
             if (hasFormOriginHashChanged(context, formOrigin)) {
-                throw AutofillPublisherChangedException(context.getString(R.string.oreo_autofill_publisher_changed))
+                throw AutofillPublisherChangedException(formOrigin)
             }
             val matchPreferences = context.matchPreferences(formOrigin)
             val matchedFiles =
@@ -121,7 +125,7 @@ class AutofillMatcher {
                 // This should never happen since we already verified the publisher in
                 // getMatchesFor.
                 e { "App publisher changed between getMatchesFor and addMatchFor" }
-                throw AutofillPublisherChangedException(context.getString(R.string.oreo_autofill_publisher_changed))
+                throw AutofillPublisherChangedException(formOrigin)
             }
             val matchPreferences = context.matchPreferences(formOrigin)
             val matchedFiles =
