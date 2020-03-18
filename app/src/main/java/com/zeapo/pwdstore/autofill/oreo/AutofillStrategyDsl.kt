@@ -215,7 +215,10 @@ class AutofillRule private constructor(
     fun apply(
         allPassword: List<FormField>, allUsername: List<FormField>, singleOriginMode: Boolean
     ): AutofillScenario<FormField>? {
-        if (singleOriginMode && !applyInSingleOriginMode) return null
+        if (singleOriginMode && !applyInSingleOriginMode) {
+            d { "$name: Skipped in single origin mode" }
+            return null
+        }
         val scenarioBuilder = AutofillScenario.Builder<FormField>()
         val alreadyMatched = mutableListOf<FormField>()
         for ((type, matcher, optional) in matchers) {
