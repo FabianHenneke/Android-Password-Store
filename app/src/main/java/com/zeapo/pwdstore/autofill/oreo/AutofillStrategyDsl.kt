@@ -26,7 +26,7 @@ interface FieldMatcher {
         private var tieBreakersPair: MutableList<Pair<FormField, FormField>.(List<FormField>) -> Boolean> =
             mutableListOf()
 
-        fun takeSingle(block: FormField.(alreadyMatched: List<FormField>) -> Boolean) {
+        fun takeSingle(block: FormField.(alreadyMatched: List<FormField>) -> Boolean = { true }) {
             check(takeSingle == null && takePair == null) { "Every block can only have at most one take{Single,Pair} block" }
             takeSingle = block
         }
@@ -37,7 +37,7 @@ interface FieldMatcher {
             tieBreakersSingle.add(block)
         }
 
-        fun takePair(block: Pair<FormField, FormField>.(alreadyMatched: List<FormField>) -> Boolean) {
+        fun takePair(block: Pair<FormField, FormField>.(alreadyMatched: List<FormField>) -> Boolean = { true }) {
             check(takeSingle == null && takePair == null) { "Every block can only have at most one take{Single,Pair} block" }
             takePair = block
         }
@@ -72,7 +72,7 @@ class SingleFieldMatcher(
         private val tieBreakersSingle: MutableList<FormField.(List<FormField>) -> Boolean> =
             mutableListOf()
 
-        fun takeSingle(block: FormField.(alreadyMatched: List<FormField>) -> Boolean) {
+        fun takeSingle(block: FormField.(alreadyMatched: List<FormField>) -> Boolean = { true }) {
             check(takeSingle == null) { "Every block can only have at most one takeSingle block" }
             takeSingle = block
         }

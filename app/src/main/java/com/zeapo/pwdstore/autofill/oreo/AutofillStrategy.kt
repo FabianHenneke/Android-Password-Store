@@ -26,7 +26,7 @@ private inline fun <T> Pair<T, T>.none(predicate: T.() -> Boolean) =
 val autofillStrategy = strategy {
 
     // Match two new password fields, an optional current password field right below or above, and
-    // and an optional username field.
+    // an optional username field with autocomplete hint.
     // TODO: Introduce a custom fill/generate/update flow for this scenario
     rule {
         newPassword {
@@ -41,29 +41,27 @@ val autofillStrategy = strategy {
             }
         }
         username(optional = true) {
-            takeSingle { usernameCertainty >= Likely }
-            breakTieOnSingle { usernameCertainty >= Certain }
+            takeSingle { hasAutocompleteHintUsername }
             breakTieOnSingle { alreadyMatched -> directlyPrecedes(alreadyMatched) }
             breakTieOnSingle { isFocused }
         }
     }
 
-    // Match a single current password field and optional preceding username field.
+    // Match a single current password field and optional username field with autocomplete hint.
     rule {
         currentPassword {
             takeSingle { hasAutocompleteHintCurrentPassword }
             breakTieOnSingle { isFocused }
         }
         username(optional = true) {
-            takeSingle { usernameCertainty >= Likely }
-            breakTieOnSingle { usernameCertainty >= Certain }
+            takeSingle { hasAutocompleteHintUsername }
             breakTieOnSingle { alreadyMatched -> directlyPrecedes(alreadyMatched) }
             breakTieOnSingle { isFocused }
         }
     }
 
     // Match two adjacent password fields, implicitly understood as new passwords, and optional
-    // preceding username field.
+    // username field.
     rule {
         newPassword {
             takePair { all { passwordCertainty >= Likely } }
@@ -71,7 +69,24 @@ val autofillStrategy = strategy {
             breakTieOnPair { any { isFocused } }
         }
         username(optional = true) {
-            takeSingle { usernameCertainty >= Likely }
+            takeSingle()
+            breakTieOnSingle { usernameCertainty >= Likely }
+            breakTieOnSingle { usernameCertainty >= Certain }
+            breakTieOnSingle { alreadyMatched -> directlyPrecedes(alreadyMatched) }
+            breakTieOnSingle { isFocused }
+        }
+    }
+
+    // Match a single password field and optional username field.
+    rule {
+        genericPassword {
+            takeSingle { passwordCertainty >= Likely }
+            breakTieOnSingle { passwordCertainty >= Certain }
+            breakTieOnSingle { isFocused }
+        }
+        username(optional = true) {
+            takeSingle()
+            breakTieOnSingle { usernameCertainty >= Likely }
             breakTieOnSingle { usernameCertainty >= Certain }
             breakTieOnSingle { alreadyMatched -> directlyPrecedes(alreadyMatched) }
             breakTieOnSingle { isFocused }

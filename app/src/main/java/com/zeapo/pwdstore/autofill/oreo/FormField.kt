@@ -149,7 +149,7 @@ class FormField(node: AssistStructure.ViewNode, private val index: Int, passDown
     // TODO: Revisit this decision in the future and potentially use the following instead:
     // private val notExcludedByAutocompleteHints = htmlAutocomplete != "off"
     private val notExcludedByAutocompleteHints = true
-    private val hasAutocompleteHintUsername = htmlAutocomplete == "username"
+    val hasAutocompleteHintUsername = htmlAutocomplete == "username"
     val hasAutocompleteHintCurrentPassword = htmlAutocomplete == "current-password"
     val hasAutocompleteHintNewPassword = htmlAutocomplete == "new-password"
     private val hasAutocompleteHintPassword =
