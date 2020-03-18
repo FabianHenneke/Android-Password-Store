@@ -133,6 +133,8 @@ private val BROWSER_SAVE_METHOD = mapOf(
     "com.opera.touch" to 0
 )
 
+@RequiresApi(Build.VERSION_CODES.O)
 fun isBrowserWithSaveSupport(appPackage: String): Boolean = getBrowserSaveFlag(appPackage) != null
 
+@RequiresApi(Build.VERSION_CODES.O)
 fun getBrowserSaveFlag(appPackage: String): Int? = BROWSER_SAVE_METHOD[appPackage]

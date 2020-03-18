@@ -103,8 +103,7 @@ private class Form(context: Context, structure: AssistStructure) {
         d { "Origin: $formOrigin" }
     }
 
-    val originSupportsSave = formOrigin != null && (!isBrowser || isBrowserSupportingSave)
-    val saveFlags = getBrowserSaveFlag(appPackage)
+    val saveFlags = if (isBrowserSupportingSave) getBrowserSaveFlag(appPackage) else null
 
     private fun parseStructure(structure: AssistStructure) {
         for (i in 0 until structure.windowNodeCount) {
@@ -197,7 +196,6 @@ class FillableForm private constructor(
     private val formOrigin: FormOrigin,
     private val scenario: AutofillScenario<FormField>,
     private val ignoredIds: List<AutofillId>,
-    originSupportsSave: Boolean,
     private val saveFlags: Int?
 ) {
     companion object {
@@ -226,7 +224,6 @@ class FillableForm private constructor(
                 form.formOrigin,
                 form.scenario,
                 form.ignoredIds,
-                form.saveFlags != null,
                 form.saveFlags
             )
         }
@@ -239,7 +236,7 @@ class FillableForm private constructor(
     // We do not offer save when the only relevant field is a username field or there is no field.
     private val scenarioSupportsSave =
         scenario.fieldsToSave.minus(listOfNotNull(scenario.username)).isNotEmpty()
-    private val canBeSaved = originSupportsSave && scenarioSupportsSave
+    private val canBeSaved = saveFlags != null && scenarioSupportsSave
 
     private fun makePlaceholderDataset(
         remoteView: RemoteViews,

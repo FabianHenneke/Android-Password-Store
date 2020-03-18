@@ -49,7 +49,7 @@ class FormField(
             "com.google.android.material.textfield.TextInputEditText"
         )
 
-        private val ANDROID_WEB_VIEW_CLASS_NAME = "android.webkit.WebView"
+        private const val ANDROID_WEB_VIEW_CLASS_NAME = "android.webkit.WebView"
 
         private fun isPasswordInputType(inputType: Int): Boolean {
             val typeClass = inputType and InputType.TYPE_MASK_CLASS
@@ -105,7 +105,7 @@ class FormField(
     val isFocused = node.isFocused
 
     // The webOrigin of a WebView should be passed down to its children in certain browsers
-    val isWebView = node.className == ANDROID_WEB_VIEW_CLASS_NAME
+    private val isWebView = node.className == ANDROID_WEB_VIEW_CLASS_NAME
     val webOrigin = node.webOrigin ?: if (passDownWebViewOrigins) passedDownWebOrigin else null
     val webOriginToPassDown = if (passDownWebViewOrigins) {
         if (isWebView) webOrigin else passedDownWebOrigin
