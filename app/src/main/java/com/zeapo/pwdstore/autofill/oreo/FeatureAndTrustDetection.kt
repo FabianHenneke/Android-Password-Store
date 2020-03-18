@@ -6,7 +6,6 @@ package com.zeapo.pwdstore.autofill.oreo
 
 import android.content.Context
 import android.os.Build
-import android.service.autofill.SaveInfo
 import androidx.annotation.RequiresApi
 
 /*

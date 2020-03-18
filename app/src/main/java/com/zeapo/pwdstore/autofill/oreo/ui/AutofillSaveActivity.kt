@@ -14,7 +14,6 @@ import android.os.Bundle
 import android.view.autofill.AutofillManager
 import androidx.annotation.RequiresApi
 import androidx.core.os.bundleOf
-import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.e
 import com.zeapo.pwdstore.PasswordStore
 import com.zeapo.pwdstore.autofill.oreo.*

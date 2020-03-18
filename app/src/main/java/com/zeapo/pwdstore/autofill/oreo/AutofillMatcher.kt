@@ -15,7 +15,6 @@ import com.github.ajalt.timberkt.w
 import com.zeapo.pwdstore.R
 import java.io.File
 
-
 private const val PREFERENCES_AUTOFILL_APP_MATCHES = "oreo_autofill_app_matches"
 private val Context.autofillAppMatches
     get() = getSharedPreferences(PREFERENCES_AUTOFILL_APP_MATCHES, Context.MODE_PRIVATE)

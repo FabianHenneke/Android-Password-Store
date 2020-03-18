@@ -12,7 +12,6 @@ import android.view.autofill.AutofillId
 import androidx.annotation.RequiresApi
 import java.util.*
 
-
 enum class CertaintyLevel {
     Impossible, Possible, Likely, Certain
 }

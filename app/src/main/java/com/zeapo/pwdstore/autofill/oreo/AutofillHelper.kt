@@ -4,7 +4,6 @@
  */
 package com.zeapo.pwdstore.autofill.oreo
 
-import android.annotation.SuppressLint
 import android.app.assist.AssistStructure
 import android.content.Context
 import android.content.IntentSender
@@ -23,7 +22,6 @@ import com.zeapo.pwdstore.PasswordEntry
 import com.zeapo.pwdstore.R
 import java.io.File
 import java.security.MessageDigest
-
 
 private fun ByteArray.sha256(): ByteArray {
     return MessageDigest.getInstance("SHA-256").run {

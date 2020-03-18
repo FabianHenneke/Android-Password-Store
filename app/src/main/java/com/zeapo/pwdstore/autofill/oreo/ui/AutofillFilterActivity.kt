@@ -30,7 +30,6 @@ import kotlinx.android.synthetic.main.activity_oreo_autofill_filter.*
 import java.io.File
 import java.util.*
 
-
 @TargetApi(Build.VERSION_CODES.O)
 class AutofillFilterView : AppCompatActivity() {
 

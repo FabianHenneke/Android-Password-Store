@@ -40,8 +40,6 @@ import com.zeapo.pwdstore.ClipboardService
 import com.zeapo.pwdstore.PasswordEntry
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.UserPreference
-import com.zeapo.pwdstore.autofill.oreo.AutofillMatcher
-import com.zeapo.pwdstore.autofill.oreo.FormOrigin
 import com.zeapo.pwdstore.ui.dialogs.PasswordGeneratorDialogFragment
 import com.zeapo.pwdstore.ui.dialogs.XkPasswordGeneratorDialogFragment
 import com.zeapo.pwdstore.utils.Otp
