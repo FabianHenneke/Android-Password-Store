@@ -19,10 +19,11 @@ interface FieldMatcher {
     @AutofillDsl
     class Builder {
         private var takeSingle: (FormField.(List<FormField>) -> Boolean)? = null
-        private val tieBreakersSingle: MutableList<FormField.() -> Boolean> = mutableListOf()
+        private val tieBreakersSingle: MutableList<FormField.(List<FormField>) -> Boolean> =
+            mutableListOf()
 
         private var takePair: (Pair<FormField, FormField>.(List<FormField>) -> Boolean)? = null
-        private var tieBreakersPair: MutableList<Pair<FormField, FormField>.() -> Boolean> =
+        private var tieBreakersPair: MutableList<Pair<FormField, FormField>.(List<FormField>) -> Boolean> =
             mutableListOf()
 
         fun takeSingle(block: FormField.(alreadyMatched: List<FormField>) -> Boolean) {
@@ -30,7 +31,7 @@ interface FieldMatcher {
             takeSingle = block
         }
 
-        fun breakTieOnSingle(block: FormField.() -> Boolean) {
+        fun breakTieOnSingle(block: FormField.(alreadyMatched: List<FormField>) -> Boolean) {
             check(takeSingle != null) { "Every block needs a takeSingle block before a breakTieOnSingle block" }
             check(takePair == null) { "takePair cannot be mixed with breakTieOnSingle" }
             tieBreakersSingle.add(block)
@@ -41,7 +42,7 @@ interface FieldMatcher {
             takePair = block
         }
 
-        fun breakTieOnPair(block: Pair<FormField, FormField>.() -> Boolean) {
+        fun breakTieOnPair(block: Pair<FormField, FormField>.(alreadyMatched: List<FormField>) -> Boolean) {
             check(takePair != null) { "Every block needs a takePair block before a breakTieOnPair block" }
             check(takeSingle == null) { "takeSingle cannot be mixed with breakTieOnPair" }
             tieBreakersPair.add(block)
@@ -62,20 +63,21 @@ interface FieldMatcher {
 @RequiresApi(Build.VERSION_CODES.O)
 class SingleFieldMatcher(
     private val take: (FormField, List<FormField>) -> Boolean,
-    private val tieBreakers: List<(FormField) -> Boolean>
+    private val tieBreakers: List<(FormField, List<FormField>) -> Boolean>
 ) : FieldMatcher {
 
     @AutofillDsl
     class Builder {
         private var takeSingle: (FormField.(List<FormField>) -> Boolean)? = null
-        private val tieBreakersSingle: MutableList<FormField.() -> Boolean> = mutableListOf()
+        private val tieBreakersSingle: MutableList<FormField.(List<FormField>) -> Boolean> =
+            mutableListOf()
 
         fun takeSingle(block: FormField.(alreadyMatched: List<FormField>) -> Boolean) {
             check(takeSingle == null) { "Every block can only have at most one takeSingle block" }
             takeSingle = block
         }
 
-        fun breakTieOnSingle(block: FormField.() -> Boolean) {
+        fun breakTieOnSingle(block: FormField.(alreadyMatched: List<FormField>) -> Boolean) {
             check(takeSingle != null) { "Every block needs a takeSingle block before a breakTieOnSingle block" }
             tieBreakersSingle.add(block)
         }
@@ -88,11 +90,11 @@ class SingleFieldMatcher(
     }
 
     override fun match(fields: List<FormField>, alreadyMatched: List<FormField>): List<FormField>? {
-        return fields.filter { take(it, alreadyMatched) }.let { contestants ->
+        return fields.minus(alreadyMatched).filter { take(it, alreadyMatched) }.let { contestants ->
             var current = contestants
             for (tieBreaker in tieBreakers) {
                 // Successively filter matched fields via tie breakers...
-                val new = current.filter { tieBreaker(it) }
+                val new = current.filter { tieBreaker(it, alreadyMatched) }
                 // skipping those tie breakers that are not satisfied for any remaining field...
                 if (new.isEmpty()) continue
                 // and return if the available options have been narrowed to a single field.
@@ -107,15 +109,16 @@ class SingleFieldMatcher(
 @RequiresApi(Build.VERSION_CODES.O)
 class PairOfFieldsMatcher(
     private val take: (Pair<FormField, FormField>, List<FormField>) -> Boolean,
-    private val tieBreakers: List<(Pair<FormField, FormField>) -> Boolean>
+    private val tieBreakers: List<(Pair<FormField, FormField>, List<FormField>) -> Boolean>
 ) : FieldMatcher {
 
     override fun match(fields: List<FormField>, alreadyMatched: List<FormField>): List<FormField>? {
-        return fields.zipWithNext().filter { it.first directlyPrecedes it.second }
-            .filter { take(it, alreadyMatched) }.let { contestants ->
+        return fields.minus(alreadyMatched).zipWithNext()
+            .filter { it.first directlyPrecedes it.second }.filter { take(it, alreadyMatched) }
+            .let { contestants ->
                 var current = contestants
                 for (tieBreaker in tieBreakers) {
-                    val new = current.filter { tieBreaker(it) }
+                    val new = current.filter { tieBreaker(it, alreadyMatched) }
                     if (new.isEmpty()) continue
                     if (new.size == 1) break
                     current = new

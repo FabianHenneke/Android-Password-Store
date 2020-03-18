@@ -9,13 +9,13 @@ import androidx.annotation.RequiresApi
 import com.zeapo.pwdstore.autofill.oreo.CertaintyLevel.Certain
 import com.zeapo.pwdstore.autofill.oreo.CertaintyLevel.Likely
 
-private inline fun <T> Pair<T, T>.all(predicate: (T) -> Boolean) =
+private inline fun <T> Pair<T, T>.all(predicate: T.() -> Boolean) =
     predicate(first) && predicate(second)
 
-private inline fun <T> Pair<T, T>.any(predicate: (T) -> Boolean) =
+private inline fun <T> Pair<T, T>.any(predicate: T.() -> Boolean) =
     predicate(first) || predicate(second)
 
-private inline fun <T> Pair<T, T>.none(predicate: (T) -> Boolean) =
+private inline fun <T> Pair<T, T>.none(predicate: T.() -> Boolean) =
     !predicate(first) && !predicate(second)
 
 /**
@@ -24,39 +24,66 @@ private inline fun <T> Pair<T, T>.none(predicate: (T) -> Boolean) =
  */
 @RequiresApi(Build.VERSION_CODES.O)
 val autofillStrategy = strategy {
+
+    // Match two new password fields, an optional current password field right below or above, and
+    // and an optional username field.
+    // TODO: Introduce a custom fill/generate/update flow for this scenario
     rule {
         newPassword {
-            takePair {
-                all { it.passwordCertainty >= Likely && it.hasAutocompleteHintNewPassword }
+            takePair { all { hasAutocompleteHintNewPassword } }
+            breakTieOnPair { any { isFocused } }
+        }
+        currentPassword(optional = true) {
+            takeSingle { alreadyMatched ->
+                val adjacentToNewPasswords =
+                    directlyPrecedes(alreadyMatched) || directlyFollows(alreadyMatched)
+                hasAutocompleteHintCurrentPassword && adjacentToNewPasswords
             }
-            breakTieOnPair { all { it.passwordCertainty >= Certain } }
         }
         username(optional = true) {
-            takeSingle { alreadyMatched ->
-                usernameCertainty >= Likely && directlyPrecedes(alreadyMatched)
-            }
+            takeSingle { usernameCertainty >= Likely }
+            breakTieOnSingle { usernameCertainty >= Certain }
+            breakTieOnSingle { alreadyMatched -> directlyPrecedes(alreadyMatched) }
+            breakTieOnSingle { isFocused }
         }
     }
 
+    // Match a single current password field and optional preceding username field.
     rule {
         currentPassword {
-            takeSingle {
-                passwordCertainty >= Likely && hasAutocompleteHintCurrentPassword
-            }
-            breakTieOnSingle { passwordCertainty >= Certain }
+            takeSingle { hasAutocompleteHintCurrentPassword }
+            breakTieOnSingle { isFocused }
         }
         username(optional = true) {
-            takeSingle { alreadyMatched ->
-                usernameCertainty >= Likely && directlyPrecedes(alreadyMatched.singleOrNull())
-            }
+            takeSingle { usernameCertainty >= Likely }
+            breakTieOnSingle { usernameCertainty >= Certain }
+            breakTieOnSingle { alreadyMatched -> directlyPrecedes(alreadyMatched) }
+            breakTieOnSingle { isFocused }
         }
     }
 
+    // Match two adjacent password fields, implicitly understood as new passwords, and optional
+    // preceding username field.
+    rule {
+        newPassword {
+            takePair { all { passwordCertainty >= Likely } }
+            breakTieOnPair { all { passwordCertainty >= Certain } }
+            breakTieOnPair { any { isFocused } }
+        }
+        username(optional = true) {
+            takeSingle { usernameCertainty >= Likely }
+            breakTieOnSingle { usernameCertainty >= Certain }
+            breakTieOnSingle { alreadyMatched -> directlyPrecedes(alreadyMatched) }
+            breakTieOnSingle { isFocused }
+        }
+    }
+
+    // Match a single focused new password field and optional preceding username field.
+    // This rule can apply in single origin mode since it only fills into a single focused password
+    // field.
     rule(applyInSingleOriginMode = true) {
         newPassword {
-            takeSingle {
-                passwordCertainty >= Likely && hasAutocompleteHintNewPassword && isFocused
-            }
+            takeSingle { hasAutocompleteHintNewPassword && isFocused }
         }
         username(optional = true) {
             takeSingle { alreadyMatched ->
@@ -65,11 +92,12 @@ val autofillStrategy = strategy {
         }
     }
 
+    // Match a single focused current password field and optional preceding username field.
+    // This rule can apply in single origin mode since it only fills into a single focused password
+    // field.
     rule(applyInSingleOriginMode = true) {
         currentPassword {
-            takeSingle {
-                passwordCertainty >= Likely && hasAutocompleteHintCurrentPassword && isFocused
-            }
+            takeSingle { hasAutocompleteHintCurrentPassword && isFocused }
         }
         username(optional = true) {
             takeSingle { alreadyMatched ->
@@ -78,11 +106,12 @@ val autofillStrategy = strategy {
         }
     }
 
+    // Match a single focused password field and optional preceding username field.
+    // This rule can apply in single origin mode since it only fills into a single focused password
+    // field.
     rule(applyInSingleOriginMode = true) {
         genericPassword {
-            takeSingle {
-                passwordCertainty >= Likely && isFocused
-            }
+            takeSingle { passwordCertainty >= Likely && isFocused }
         }
         username(optional = true) {
             takeSingle { alreadyMatched ->
