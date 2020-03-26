@@ -5,6 +5,7 @@
 package com.zeapo.pwdstore.autofill.oreo
 
 import android.app.assist.AssistStructure
+import android.app.slice.Slice
 import android.content.Context
 import android.content.IntentSender
 import android.content.pm.PackageManager
@@ -14,11 +15,17 @@ import android.os.Bundle
 import android.service.autofill.Dataset
 import android.service.autofill.FillCallback
 import android.service.autofill.FillResponse
+import android.service.autofill.InlinePresentation
 import android.service.autofill.SaveInfo
+import android.util.Size
 import android.view.autofill.AutofillId
+import android.view.inline.InlinePresentationSpec
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import androidx.core.os.bundleOf
+import androidx.slice.builders.ListBuilder
+import androidx.slice.builders.list
+import androidx.slice.builders.row
 import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.e
 import com.zeapo.pwdstore.autofill.oreo.ui.AutofillDecryptActivity
@@ -249,6 +256,7 @@ class FillableForm private constructor(
     private val canBeSaved = saveFlags != null && scenarioSupportsSave
 
     private fun makePlaceholderDataset(
+        context: Context,
         remoteView: RemoteViews,
         intentSender: IntentSender,
         action: AutofillAction
@@ -264,7 +272,7 @@ class FillableForm private constructor(
         if (scenario.fieldsToFillOn(AutofillAction.Match).isEmpty()) return null
         val remoteView = makeFillMatchRemoteView(context, file, formOrigin)
         val intentSender = AutofillDecryptActivity.makeDecryptFileIntentSender(file, context)
-        return makePlaceholderDataset(remoteView, intentSender, AutofillAction.Match)
+        return makePlaceholderDataset(context, remoteView, intentSender, AutofillAction.Match)
     }
 
     private fun makeSearchDataset(context: Context): Dataset? {
@@ -272,14 +280,14 @@ class FillableForm private constructor(
         val remoteView = makeSearchAndFillRemoteView(context, formOrigin)
         val intentSender =
             AutofillFilterView.makeMatchAndDecryptFileIntentSender(context, formOrigin)
-        return makePlaceholderDataset(remoteView, intentSender, AutofillAction.Search)
+        return makePlaceholderDataset(context, remoteView, intentSender, AutofillAction.Search)
     }
 
     private fun makeGenerateDataset(context: Context): Dataset? {
         if (scenario.fieldsToFillOn(AutofillAction.Generate).isEmpty()) return null
         val remoteView = makeGenerateAndFillRemoteView(context, formOrigin)
         val intentSender = AutofillSaveActivity.makeSaveIntentSender(context, null, formOrigin)
-        return makePlaceholderDataset(remoteView, intentSender, AutofillAction.Generate)
+        return makePlaceholderDataset(context, remoteView, intentSender, AutofillAction.Generate)
     }
 
     private fun makePublisherChangedDataset(
@@ -290,7 +298,7 @@ class FillableForm private constructor(
         val intentSender = AutofillPublisherChangedActivity.makePublisherChangedIntentSender(
             context, publisherChangedException
         )
-        return makePlaceholderDataset(remoteView, intentSender, AutofillAction.Match)
+        return makePlaceholderDataset(context, remoteView, intentSender, AutofillAction.Match)
     }
 
     private fun makePublisherChangedResponse(

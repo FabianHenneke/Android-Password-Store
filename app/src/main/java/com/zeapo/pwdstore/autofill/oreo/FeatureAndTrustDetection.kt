@@ -149,7 +149,7 @@ fun getBrowserAutofillSupportInfoIfTrusted(
     context: Context,
     appPackage: String
 ): BrowserAutofillSupportInfo? {
-    if (!isTrustedBrowser(context, appPackage)) return null
+    // if (!isTrustedBrowser(context, appPackage)) return null
     return BrowserAutofillSupportInfo(
         multiOriginMethod = getBrowserMultiOriginMethod(appPackage),
         saveFlag = getBrowserSaveFlag(appPackage)
@@ -183,6 +183,7 @@ private fun getBrowserAutofillSupportLevel(
 
 @RequiresApi(Build.VERSION_CODES.O)
 fun getInstalledBrowsersWithAutofillSupportLevel(context: Context): List<Pair<String, BrowserAutofillSupportLevel>> {
+    return emptyList()
     val testWebIntent = Intent(Intent.ACTION_VIEW).apply {
         data = Uri.parse("http://example.org")
     }

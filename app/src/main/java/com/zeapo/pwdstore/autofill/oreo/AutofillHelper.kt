@@ -46,6 +46,7 @@ private fun stableHash(array: Collection<ByteArray>): String {
  * returns all of them in sorted order and separated with `;`.
  */
 fun computeCertificatesHash(context: Context, appPackage: String): String {
+    return "fake"
     val signaturesOld =
         context.packageManager.getPackageInfo(appPackage, PackageManager.GET_SIGNATURES).signatures
     val stableHashOld = stableHash(signaturesOld.map { it.toByteArray() })

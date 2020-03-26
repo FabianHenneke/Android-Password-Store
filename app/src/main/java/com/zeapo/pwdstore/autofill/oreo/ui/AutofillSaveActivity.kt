@@ -96,11 +96,16 @@ class AutofillSaveActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val repo = PasswordRepository.getRepositoryDirectory(applicationContext)
+        val folderName = intent.getStringExtra(EXTRA_FOLDER_NAME) ?: run {
+            e { "Missing EXTRA_FOLDER_NAME" }
+            finish()
+            return
+        }
         val saveIntent = Intent(this, PgpActivity::class.java).apply {
             putExtras(
                 bundleOf(
                     "REPO_PATH" to repo.absolutePath,
-                    "FILE_PATH" to repo.resolve(intent.getStringExtra(EXTRA_FOLDER_NAME)).absolutePath,
+                    "FILE_PATH" to repo.resolve(folderName).absolutePath,
                     "OPERATION" to "ENCRYPT",
                     "SUGGESTED_NAME" to intent.getStringExtra(EXTRA_NAME),
                     "SUGGESTED_PASS" to intent.getStringExtra(EXTRA_PASSWORD),

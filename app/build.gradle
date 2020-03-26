@@ -87,6 +87,7 @@ dependencies {
     implementation deps.androidx.local_broadcast_manager
     implementation deps.androidx.material
     implementation deps.androidx.preference
+    implementation deps.androidx.slices
     implementation deps.androidx.swiperefreshlayout
     implementation(deps.androidx.recycler_view)
 

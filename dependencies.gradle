@@ -4,8 +4,8 @@
  */
 ext.versions = [
     minSdk: 23,
-    targetSdk: 28,
-    compileSdk: 28,
+    targetSdk: 'R',
+    compileSdk: 'android-R',
     versionCode: 10601,
     versionName: '1.7.0-SNAPSHOT',
     buildTools: '29.0.3',
@@ -39,6 +39,7 @@ ext.deps = [
         material: 'com.google.android.material:material:1.2.0-alpha05',
         preference: 'androidx.preference:preference:1.1.0',
         recycler_view: 'androidx.recyclerview:recyclerview:1.2.0-alpha01',
+        slices: 'androidx.slice:slice-builders-ktx:+',
         swiperefreshlayout: 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0-beta01'
     ],
 

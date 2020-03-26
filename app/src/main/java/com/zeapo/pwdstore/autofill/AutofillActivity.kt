@@ -50,7 +50,7 @@ class AutofillActivity : AppCompatActivity() {
                 AutofillService.instance?.setResultData(data!!) // report the result to service
             }
             REQUEST_CODE_PICK -> if (resultCode == RESULT_OK) {
-                AutofillService.instance?.setPickedPassword(data!!.getStringExtra("path"))
+                AutofillService.instance?.setPickedPassword(data!!.getStringExtra("path")!!)
             }
             REQUEST_CODE_PICK_MATCH_WITH -> if (resultCode == RESULT_OK) {
                 // need to not only decrypt the picked password, but also
@@ -60,7 +60,7 @@ class AutofillActivity : AppCompatActivity() {
                 val isWeb = extras.getBoolean("isWeb")
 
                 val path = data!!.getStringExtra("path")
-                AutofillService.instance?.setPickedPassword(data.getStringExtra("path"))
+                AutofillService.instance?.setPickedPassword(data.getStringExtra("path")!!)
 
                 val prefs: SharedPreferences
                 prefs = if (!isWeb) {
