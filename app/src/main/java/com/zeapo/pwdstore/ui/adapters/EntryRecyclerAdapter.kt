@@ -15,6 +15,7 @@ import androidx.appcompat.widget.AppCompatTextView
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
 import com.zeapo.pwdstore.R
+import com.zeapo.pwdstore.SearchableRepositoryAdapter
 import com.zeapo.pwdstore.utils.PasswordItem
 import com.zeapo.pwdstore.widget.MultiselectableConstraintLayout
 import java.io.File
@@ -88,7 +89,7 @@ abstract class EntryRecyclerAdapter internal constructor(val values: ArrayList<P
     // Replace the contents of a view (invoked by the layout manager)
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         settings = settings
-                ?: PreferenceManager.getDefaultSharedPreferences(holder.view.context.applicationContext)
+                ?: PreferenceManager.getDefaultSharedPreferences(holder.itemView.context.applicationContext)
         val pass = values[position]
         val showHidden = settings?.getBoolean("show_hidden_folders", false) ?: false
         holder.name.text = pass.toString()
@@ -111,12 +112,12 @@ abstract class EntryRecyclerAdapter internal constructor(val values: ArrayList<P
             holder.childCount.visibility = View.GONE
             holder.folderIndicator.visibility = View.GONE
         }
-        holder.view.setOnClickListener(getOnClickListener(holder, pass))
-        holder.view.setOnLongClickListener(getOnLongClickListener(holder, pass))
+        holder.itemView.setOnClickListener(getOnClickListener(holder, pass))
+        holder.itemView.setOnLongClickListener(getOnLongClickListener(holder, pass))
 
         // after removal, everything is rebound for some reason; views are shuffled?
         val selected = selectedItems.contains(position)
-        holder.view.isSelected = selected
+        holder.itemView.isSelected = selected
         (holder.itemView as MultiselectableConstraintLayout).setMultiSelected(selected)
     }
 
@@ -139,10 +140,41 @@ abstract class EntryRecyclerAdapter internal constructor(val values: ArrayList<P
      you provide access to all the views for a data item in a view holder
      each data item is just a string in this case
     */
-    class ViewHolder(val view: View) : RecyclerView.ViewHolder(view) {
-        val name: AppCompatTextView = view.findViewById(R.id.label)
-        val typeImage: AppCompatImageView = view.findViewById(R.id.type_image)
-        val childCount: AppCompatTextView = view.findViewById(R.id.child_count)
-        val folderIndicator: AppCompatImageView = view.findViewById(R.id.folder_indicator)
+    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val name: AppCompatTextView = itemView.findViewById(R.id.label)
+        val typeImage: AppCompatImageView = itemView.findViewById(R.id.type_image)
+        val childCount: AppCompatTextView = itemView.findViewById(R.id.child_count)
+        val folderIndicator: AppCompatImageView = itemView.findViewById(R.id.folder_indicator)
+
+        fun bind(item: PasswordItem) {
+            val settings = PreferenceManager.getDefaultSharedPreferences(itemView.context.applicationContext)
+            val showHidden = settings.getBoolean("show_hidden_folders", false)
+            name.text = item.toString()
+            if (item.type == PasswordItem.TYPE_CATEGORY) {
+                typeImage.setImageResource(R.drawable.ic_multiple_files_24dp)
+                folderIndicator.visibility = View.VISIBLE
+                val children = item.file.listFiles { pathname ->
+                    !(!showHidden && (pathname.isDirectory && pathname.isHidden))
+                } ?: emptyArray<File>()
+                val count = children.size
+                childCount.visibility = if (count > 0) View.VISIBLE else View.GONE
+                childCount.text = "$count"
+            } else {
+                typeImage.setImageResource(R.drawable.ic_action_secure_24dp)
+                val parentPath = item.fullPathToParent.replace("(^/)|(/$)".toRegex(), "")
+                val source = "$parentPath\n$item"
+                val spannable = SpannableString(source)
+                spannable.setSpan(RelativeSizeSpan(0.7f), 0, parentPath.length, 0)
+                name.text = spannable
+                childCount.visibility = View.GONE
+                folderIndicator.visibility = View.GONE
+            }
+            itemView.setOnClickListener(getOnClickListener(holder, pass))
+            itemView.setOnLongClickListener(getOnLongClickListener(holder, pass))
+        }
     }
+}
+
+abstract class EntryRecyclerAdapter2 internal constructor(val values: ArrayList<PasswordItem>) : SearchableRepositoryAdapter<EntryRecyclerAdapter.ViewHolder>(R.layout.password_row_layout, EntryRecyclerAdapter::ViewHolder, EntryRecyclerAdapter.ViewHolder::bind) {
+    val selectedItems: MutableSet<Int> = TreeSet()
 }

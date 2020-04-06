@@ -24,7 +24,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.ajalt.timberkt.e
-import com.zeapo.pwdstore.DelegatedSearchableRepositoryAdapter
+import com.zeapo.pwdstore.SearchableRepositoryAdapter
 import com.zeapo.pwdstore.FilterMode
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.SearchMode
@@ -116,7 +116,7 @@ class AutofillFilterView : AppCompatActivity() {
     }
 
     private fun bindUI() {
-        val searchableAdapter = DelegatedSearchableRepositoryAdapter(
+        val searchableAdapter = SearchableRepositoryAdapter(
             R.layout.oreo_autofill_filter_row,
             ::PasswordViewHolder
         ) { item ->

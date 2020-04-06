@@ -35,6 +35,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.yield
+import me.zhanghai.android.fastscroll.PopupTextProvider
+import java.util.Locale
 
 private fun File.toPasswordItem(root: File) = if (isFile)
     PasswordItem.newPassword(name, this, root)
@@ -103,15 +105,23 @@ enum class SearchMode {
 
 private data class SearchAction(
     val currentDir: File,
-    val filter: String = "",
-    val filterMode: FilterMode = FilterMode.ListOnly,
-    val searchMode: SearchMode = SearchMode.CurrentDirectoryOnly,
-    val listFilesOnly: Boolean = true
+    val filter: String,
+    val filterMode: FilterMode,
+    val searchMode: SearchMode,
+    val listFilesOnly: Boolean,
+    val updateCounter: Int
 )
 
 @ExperimentalCoroutinesApi
 @FlowPreview
 class SearchableRepositoryViewModel(application: Application) : AndroidViewModel(application) {
+    private var _updateCounter = 0
+    private val updateCounter: Int
+        get() = _updateCounter
+    private fun increaseUpdateCounter() {
+        _updateCounter++
+    }
+
     private val root = PasswordRepository.getRepositoryDirectory(application)
     private val settings = PreferenceManager.getDefaultSharedPreferences(getApplication())
     private val showHiddenDirs = settings.getBoolean("show_hidden_folders", false)
@@ -126,7 +136,14 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
     private val directoryStructure = AutofillPreferences.directoryStructure(application)
     private val itemComparator = PasswordItem.makeComparator(typeSortOrder, directoryStructure)
 
-    private val searchAction = MutableLiveData(SearchAction(root))
+    private val searchAction = MutableLiveData(SearchAction(
+        currentDir = root,
+        filter = "",
+        filterMode = FilterMode.ListOnly,
+        searchMode = defaultSearchMode,
+        listFilesOnly = false,
+        updateCounter = updateCounter
+    ))
     private val searchActionFlow = searchAction.asFlow()
         .map { it.copy(filter = it.filter.trim()) }
         .distinctUntilChanged()
@@ -188,37 +205,6 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
 
     val passwordItemsList = passwordItemsFlow.asLiveData(Dispatchers.IO)
 
-    fun list(currentDir: File) {
-        require(currentDir.isDirectory) { "Can only list files in a directory" }
-        searchAction.postValue(
-            SearchAction(
-                filter = "",
-                currentDir = currentDir,
-                filterMode = FilterMode.ListOnly,
-                searchMode = SearchMode.CurrentDirectoryOnly,
-                listFilesOnly = false
-            )
-        )
-    }
-
-    fun search(
-        filter: String,
-        currentDir: File? = null,
-        filterMode: FilterMode = FilterMode.Fuzzy,
-        searchMode: SearchMode? = null,
-        listFilesOnly: Boolean = false
-    ) {
-        require(currentDir?.isDirectory != false) { "Can only search in a directory" }
-        val action = SearchAction(
-            filter = filter.trim(),
-            currentDir = currentDir ?: searchAction.value!!.currentDir,
-            filterMode = filterMode,
-            searchMode = searchMode ?: defaultSearchMode,
-            listFilesOnly = listFilesOnly
-        )
-        searchAction.postValue(action)
-    }
-
     private fun shouldTake(file: File) = with(file) {
         if (isDirectory) {
             !isHidden || showHiddenDirs
@@ -243,6 +229,45 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
             }
             .filter { file -> shouldTake(file) }
     }
+
+    fun forceRefresh() {
+        increaseUpdateCounter()
+        searchAction.postValue(searchAction.value!!.copy(updateCounter = updateCounter))
+    }
+
+    fun list(currentDir: File) {
+        require(currentDir.isDirectory) { "Can only list files in a directory" }
+        searchAction.postValue(
+            SearchAction(
+                filter = "",
+                currentDir = currentDir,
+                filterMode = FilterMode.ListOnly,
+                searchMode = SearchMode.CurrentDirectoryOnly,
+                listFilesOnly = false,
+                updateCounter = updateCounter
+            )
+        )
+    }
+
+    fun search(
+        filter: String,
+        currentDir: File? = null,
+        filterMode: FilterMode = FilterMode.Fuzzy,
+        searchMode: SearchMode? = null,
+        listFilesOnly: Boolean = false
+    ) {
+        require(currentDir?.isDirectory != false) { "Can only search in a directory" }
+        val action = SearchAction(
+            filter = filter.trim(),
+            currentDir = currentDir ?: searchAction.value!!.currentDir,
+            filterMode = filterMode,
+            searchMode = searchMode ?: defaultSearchMode,
+            listFilesOnly = listFilesOnly,
+            updateCounter = updateCounter
+        )
+        searchAction.postValue(action)
+    }
+
 }
 
 private object PasswordItemDiffCallback : DiffUtil.ItemCallback<PasswordItem>() {
@@ -252,11 +277,11 @@ private object PasswordItemDiffCallback : DiffUtil.ItemCallback<PasswordItem>() 
     override fun areContentsTheSame(oldItem: PasswordItem, newItem: PasswordItem) = oldItem == newItem
 }
 
-class DelegatedSearchableRepositoryAdapter<T : RecyclerView.ViewHolder>(
+open class SearchableRepositoryAdapter<T : RecyclerView.ViewHolder>(
     private val layoutRes: Int,
     private val viewHolderCreator: (view: View) -> T,
     private val viewHolderBinder: T.(item: PasswordItem) -> Unit
-) : ListAdapter<PasswordItem, T>(PasswordItemDiffCallback) {
+) : ListAdapter<PasswordItem, T>(PasswordItemDiffCallback), PopupTextProvider {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): T {
         val view = LayoutInflater.from(parent.context)
@@ -266,5 +291,9 @@ class DelegatedSearchableRepositoryAdapter<T : RecyclerView.ViewHolder>(
 
     override fun onBindViewHolder(holder: T, position: Int) {
         viewHolderBinder.invoke(holder, getItem(position))
+    }
+
+    override fun getPopupText(position: Int): String {
+        return getItem(position).name[0].toString().toUpperCase(Locale.getDefault())
     }
 }
