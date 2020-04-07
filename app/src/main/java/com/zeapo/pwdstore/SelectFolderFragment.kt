@@ -11,11 +11,15 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Observer
 import androidx.preference.PreferenceManager
+import androidx.recyclerview.selection.SelectionTracker
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.zeapo.pwdstore.ui.adapters.EntryRecyclerAdapter
 import com.zeapo.pwdstore.ui.adapters.FolderRecyclerAdapter
 import com.zeapo.pwdstore.utils.PasswordItem
 import com.zeapo.pwdstore.utils.PasswordRepository
@@ -40,10 +44,10 @@ class SelectFolderFragment : Fragment() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var listener: OnFragmentInteractionListener
 
+    private val model: SearchableRepositoryViewModel by activityViewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val path = requireNotNull(requireArguments().getString("Path"))
-        recyclerAdapter = FolderRecyclerAdapter(listener, getPasswords(File(path), getRepositoryDirectory(requireActivity()), sortOrder))
     }
 
     override fun onCreateView(
@@ -58,8 +62,16 @@ class SelectFolderFragment : Fragment() {
         // use divider
         recyclerView.addItemDecoration(
                 DividerItemDecoration(requireContext(), DividerItemDecoration.VERTICAL))
+        recyclerAdapter = FolderRecyclerAdapter(listener)
+        val currentDir = File(requireNotNull(requireArguments().getString("Path")))
+        pathStack.push(currentDir)
+        model.list(currentDir)
+        model.passwordItemsList.observe(this, Observer { list -> recyclerAdapter.submitList(list) })
         // Set the adapter
         recyclerView.adapter = recyclerAdapter
+
+        recyclerAdapter.setSelectionTracker(EntryRecyclerAdapter.makeTracker(recyclerView))
+
         val fab: FloatingActionButton = view.findViewById(R.id.fab)
         fab.hide()
         registerForContextMenu(recyclerView)
@@ -74,13 +86,7 @@ class SelectFolderFragment : Fragment() {
                     if (item.type == PasswordItem.TYPE_CATEGORY) {
                         // push the category were we're going
                         pathStack.push(item.file)
-                        recyclerView.scrollToPosition(0)
-                        recyclerAdapter.clear()
-                        recyclerAdapter.addAll(getPasswords(
-                                item.file,
-                                getRepositoryDirectory(context),
-                                sortOrder)
-                        )
+                        model.list(item.file)
                         (requireActivity() as AppCompatActivity).supportActionBar?.setDisplayHomeAsUpEnabled(true)
                     }
                 }

@@ -13,6 +13,11 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.asFlow
 import androidx.lifecycle.asLiveData
 import androidx.preference.PreferenceManager
+import androidx.recyclerview.selection.ItemDetailsLookup
+import androidx.recyclerview.selection.SelectionPredicates
+import androidx.recyclerview.selection.SelectionTracker
+import androidx.recyclerview.selection.StableIdKeyProvider
+import androidx.recyclerview.selection.StorageStrategy
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -20,8 +25,6 @@ import com.zeapo.pwdstore.autofill.oreo.AutofillPreferences
 import com.zeapo.pwdstore.autofill.oreo.DirectoryStructure
 import com.zeapo.pwdstore.utils.PasswordItem
 import com.zeapo.pwdstore.utils.PasswordRepository
-import java.io.File
-import java.text.Collator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -34,6 +37,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.yield
+import me.zhanghai.android.fastscroll.PopupTextProvider
+import java.io.File
+import java.text.Collator
+import java.util.Locale
 
 private fun File.toPasswordItem(root: File) = if (isFile)
     PasswordItem.newPassword(name, this, root)
@@ -105,12 +112,22 @@ private data class SearchAction(
     val filter: String,
     val filterMode: FilterMode,
     val searchMode: SearchMode,
-    val listFilesOnly: Boolean
+    val listFilesOnly: Boolean,
+    val updateCounter: Int
 )
 
 @ExperimentalCoroutinesApi
 @FlowPreview
 class SearchableRepositoryViewModel(application: Application) : AndroidViewModel(application) {
+
+    private var _updateCounter = 0
+    private val updateCounter: Int
+        get() = _updateCounter
+
+    private fun increaseUpdateCounter() {
+        _updateCounter++
+    }
+
     private val root = PasswordRepository.getRepositoryDirectory(application)
     private val settings = PreferenceManager.getDefaultSharedPreferences(getApplication())
     private val showHiddenDirs = settings.getBoolean("show_hidden_folders", false)
@@ -131,7 +148,8 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
             filter = "",
             filterMode = FilterMode.ListOnly,
             searchMode = SearchMode.InCurrentDirectoryOnly,
-            listFilesOnly = true
+            listFilesOnly = true,
+            updateCounter = updateCounter
         )
     )
     private val searchActionFlow = searchAction.asFlow()
@@ -192,39 +210,6 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
             }
         }
 
-    val passwordItemsList = passwordItemsFlow.asLiveData(Dispatchers.IO)
-
-    fun list(currentDir: File) {
-        require(currentDir.isDirectory) { "Can only list files in a directory" }
-        searchAction.postValue(
-            SearchAction(
-                filter = "",
-                currentDir = currentDir,
-                filterMode = FilterMode.ListOnly,
-                searchMode = SearchMode.InCurrentDirectoryOnly,
-                listFilesOnly = false
-            )
-        )
-    }
-
-    fun search(
-        filter: String,
-        currentDir: File? = null,
-        filterMode: FilterMode = FilterMode.Fuzzy,
-        searchMode: SearchMode? = null,
-        listFilesOnly: Boolean = false
-    ) {
-        require(currentDir?.isDirectory != false) { "Can only search in a directory" }
-        val action = SearchAction(
-            filter = filter.trim(),
-            currentDir = currentDir ?: searchAction.value!!.currentDir,
-            filterMode = filterMode,
-            searchMode = searchMode ?: defaultSearchMode,
-            listFilesOnly = listFilesOnly
-        )
-        searchAction.postValue(action)
-    }
-
     private fun shouldTake(file: File) = with(file) {
         if (isDirectory) {
             !isHidden || showHiddenDirs
@@ -247,6 +232,46 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
             }
             .filter { file -> shouldTake(file) }
     }
+
+    val passwordItemsList = passwordItemsFlow.asLiveData(Dispatchers.IO)
+
+    fun list(currentDir: File = root) {
+        require(currentDir.isDirectory) { "Can only list files in a directory" }
+        searchAction.postValue(
+            SearchAction(
+                filter = "",
+                currentDir = currentDir,
+                filterMode = FilterMode.ListOnly,
+                searchMode = SearchMode.InCurrentDirectoryOnly,
+                listFilesOnly = false,
+                updateCounter = updateCounter
+            )
+        )
+    }
+
+    fun search(
+        filter: String,
+        currentDir: File? = null,
+        filterMode: FilterMode = FilterMode.Fuzzy,
+        searchMode: SearchMode? = null,
+        listFilesOnly: Boolean = false
+    ) {
+        require(currentDir?.isDirectory != false) { "Can only search in a directory" }
+        val action = SearchAction(
+            filter = filter.trim(),
+            currentDir = currentDir ?: searchAction.value!!.currentDir,
+            filterMode = filterMode,
+            searchMode = searchMode ?: defaultSearchMode,
+            listFilesOnly = listFilesOnly,
+            updateCounter = updateCounter
+        )
+        searchAction.postValue(action)
+    }
+
+    fun forceRefresh() {
+        increaseUpdateCounter()
+        searchAction.postValue(searchAction.value!!.copy(updateCounter = updateCounter))
+    }
 }
 
 private object PasswordItemDiffCallback : DiffUtil.ItemCallback<PasswordItem>() {
@@ -256,19 +281,74 @@ private object PasswordItemDiffCallback : DiffUtil.ItemCallback<PasswordItem>() 
     override fun areContentsTheSame(oldItem: PasswordItem, newItem: PasswordItem) = oldItem == newItem
 }
 
-class DelegatedSearchableRepositoryAdapter<T : RecyclerView.ViewHolder>(
+open class SearchableRepositoryAdapter<T : RecyclerView.ViewHolder>(
     private val layoutRes: Int,
     private val viewHolderCreator: (view: View) -> T,
     private val viewHolderBinder: T.(item: PasswordItem) -> Unit
-) : ListAdapter<PasswordItem, T>(PasswordItemDiffCallback) {
+) : ListAdapter<PasswordItem, T>(PasswordItemDiffCallback), PopupTextProvider {
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): T {
+    companion object {
+        fun <T : ItemDetailsLookup<Long>> makeTracker(
+            recyclerView: RecyclerView,
+            itemDetailsLookupCreator: (recyclerView: RecyclerView) -> T
+        ): SelectionTracker<Long> {
+            return SelectionTracker.Builder(
+                "searchableRepositoryAdapter",
+                recyclerView,
+                StableIdKeyProvider(recyclerView),
+                itemDetailsLookupCreator(recyclerView),
+                StorageStrategy.createLongStorage()
+            ).withSelectionPredicate(SelectionPredicates.createSelectAnything()).build()
+        }
+    }
+
+    open fun onItemClicked(holder: T, item: PasswordItem) {}
+
+    open fun onSelectionChanged() {}
+
+    private var selectionTracker: SelectionTracker<Long>? = null
+    fun requireSelectionTracker() = selectionTracker!!
+    fun setSelectionTracker(value: SelectionTracker<Long>) {
+        value.addObserver(object : SelectionTracker.SelectionObserver<Long>() {
+            override fun onSelectionChanged() {
+                this@SearchableRepositoryAdapter.onSelectionChanged()
+            }
+        })
+        selectionTracker = value
+    }
+
+
+    // open fun onItemLongClicked(holder: T, item: PasswordItem) = false
+
+    init {
+        setHasStableIds(true)
+    }
+
+    final override fun setHasStableIds(hasStableIds: Boolean) = super.setHasStableIds(hasStableIds)
+
+    final override fun getItemId(position: Int) = position.toLong()
+
+    final override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): T {
         val view = LayoutInflater.from(parent.context)
             .inflate(layoutRes, parent, false)
         return viewHolderCreator(view)
     }
 
-    override fun onBindViewHolder(holder: T, position: Int) {
-        viewHolderBinder.invoke(holder, getItem(position))
+    final override fun onBindViewHolder(holder: T, position: Int) {
+        val item = getItem(position)
+        holder.apply {
+            viewHolderBinder.invoke(this, item)
+            selectionTracker?.let { itemView.isActivated = it.isSelected(position.toLong()) }
+            itemView.setOnClickListener {
+                onItemClicked(holder, item)
+            }
+            // itemView.setOnLongClickListener {
+            //     onItemLongClicked(holder, item)
+            // }
+        }
+    }
+
+    final override fun getPopupText(position: Int): String {
+        return getItem(position).name[0].toString().toUpperCase(Locale.getDefault())
     }
 }

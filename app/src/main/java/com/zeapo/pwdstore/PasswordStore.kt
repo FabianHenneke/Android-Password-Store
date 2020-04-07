@@ -22,6 +22,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.MenuItem.OnActionExpandListener
 import android.view.View
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.appcompat.widget.SearchView
@@ -29,6 +30,7 @@ import androidx.appcompat.widget.SearchView.OnQueryTextListener
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentManager
+import androidx.lifecycle.ViewModelProvider
 import androidx.preference.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -50,14 +52,15 @@ import com.zeapo.pwdstore.utils.PasswordRepository.Companion.getRepositoryDirect
 import com.zeapo.pwdstore.utils.PasswordRepository.Companion.initialize
 import com.zeapo.pwdstore.utils.PasswordRepository.Companion.isInitialized
 import com.zeapo.pwdstore.utils.PasswordRepository.PasswordSortOrder.Companion.getSortOrder
-import java.io.File
-import java.lang.Character.UnicodeBlock
 import org.apache.commons.io.FileUtils
 import org.apache.commons.io.FilenameUtils
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.GitAPIException
 import org.eclipse.jgit.revwalk.RevCommit
 import timber.log.Timber
+import java.io.File
+import java.lang.Character.UnicodeBlock
+import java.util.Stack
 
 class PasswordStore : AppCompatActivity() {
 
@@ -67,6 +70,10 @@ class PasswordStore : AppCompatActivity() {
     private lateinit var settings: SharedPreferences
     private var plist: PasswordFragment? = null
     private var shortcutManager: ShortcutManager? = null
+
+    private val model: SearchableRepositoryViewModel by viewModels {
+        ViewModelProvider.AndroidViewModelFactory(application)
+    }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         // open search view on search key, or Ctr+F
@@ -171,13 +178,13 @@ class PasswordStore : AppCompatActivity() {
         searchView.setOnQueryTextListener(
                 object : OnQueryTextListener {
                     override fun onQueryTextSubmit(s: String): Boolean {
-                        filterListAdapter(s)
+                        model.search(s)
                         searchView.clearFocus()
                         return true
                     }
 
                     override fun onQueryTextChange(s: String): Boolean {
-                        filterListAdapter(s)
+                        model.search(s)
                         return true
                     }
                 })
@@ -495,13 +502,12 @@ class PasswordStore : AppCompatActivity() {
     }
 
     // deletes passwords in order from top to bottom
-    fun deletePasswords(adapter: PasswordRecyclerAdapter, selectedItems: MutableSet<Int>) {
-        val it: MutableIterator<*> = selectedItems.iterator()
-        if (!it.hasNext()) {
+    fun deletePasswords(adapter: PasswordRecyclerAdapter, selectedItems: Stack<PasswordItem>) {
+        if (selectedItems.isEmpty()) {
+            refreshListAdapter()
             return
         }
-        val position = it.next() as Int
-        val item = adapter.values[position]
+        val item = selectedItems.pop()
         MaterialAlertDialogBuilder(this)
                 .setMessage(resources.getString(R.string.delete_dialog_text, item.longName))
                 .setPositiveButton(resources.getString(R.string.dialog_yes)) { _, _ ->
@@ -512,20 +518,16 @@ class PasswordStore : AppCompatActivity() {
                     }
                     AutofillMatcher.updateMatches(applicationContext, delete = filesToDelete)
                     item.file.deleteRecursively()
-                    adapter.remove(position)
-                    it.remove()
-                    adapter.updateSelectedItems(position, selectedItems)
                     commitChange(resources.getString(R.string.git_commit_remove_text, item.longName))
                     deletePasswords(adapter, selectedItems)
                 }
                 .setNegativeButton(this.resources.getString(R.string.dialog_no)) { _, _ ->
-                    it.remove()
                     deletePasswords(adapter, selectedItems)
                 }
                 .show()
     }
 
-    fun movePasswords(values: ArrayList<PasswordItem>) {
+    fun movePasswords(values: List<PasswordItem>) {
         val intent = Intent(this, SelectFolderActivity::class.java)
         val fileLocations = ArrayList<String>()
         for ((_, _, _, file) in values) {
@@ -544,10 +546,6 @@ class PasswordStore : AppCompatActivity() {
     /** Updates the adapter with the current view of passwords  */
     private fun refreshListAdapter() {
         plist?.refreshAdapter()
-    }
-
-    private fun filterListAdapter(filter: String) {
-        plist?.filterAdapter(filter)
     }
 
     private val currentDir: File?

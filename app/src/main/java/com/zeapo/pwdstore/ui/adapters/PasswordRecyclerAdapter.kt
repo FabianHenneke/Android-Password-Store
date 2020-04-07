@@ -8,20 +8,23 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import androidx.appcompat.view.ActionMode
+import androidx.recyclerview.selection.SelectionTracker
+import androidx.recyclerview.widget.RecyclerView
 import com.zeapo.pwdstore.PasswordFragment
 import com.zeapo.pwdstore.PasswordStore
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.utils.PasswordItem
-import java.util.ArrayList
-import java.util.TreeSet
+import java.util.Stack
 
 class PasswordRecyclerAdapter(
     private val activity: PasswordStore,
-    private val listener: PasswordFragment.OnFragmentInteractionListener,
-    values: ArrayList<PasswordItem>
-) : EntryRecyclerAdapter(values) {
+    private val listener: PasswordFragment.OnFragmentInteractionListener
+) : EntryRecyclerAdapter() {
+
+    private val SelectionTracker<Long>.selectedItems: List<PasswordItem>
+        get() = selection.map { getItem(it.toInt()) }
+
     var actionMode: ActionMode? = null
-    private var canEdit: Boolean = false
     private val actionModeCallback = object : ActionMode.Callback {
 
         // Called when the action mode is created; startActionMode() was called
@@ -36,7 +39,9 @@ class PasswordRecyclerAdapter(
         // Called each time the action mode is shown. Always called after onCreateActionMode, but
         // may be called multiple times if the mode is invalidated.
         override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
-            menu.findItem(R.id.menu_edit_password).isVisible = canEdit
+            menu.findItem(R.id.menu_edit_password).isVisible =
+                requireSelectionTracker().selectedItems.map { it.type == PasswordItem.TYPE_PASSWORD }
+                    .singleOrNull() == true
             return true // Return false if nothing is done
         }
 
@@ -44,21 +49,22 @@ class PasswordRecyclerAdapter(
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
             when (item.itemId) {
                 R.id.menu_delete_password -> {
-                    activity.deletePasswords(this@PasswordRecyclerAdapter, TreeSet(selectedItems))
+                    activity.deletePasswords(
+                        this@PasswordRecyclerAdapter,
+                        Stack<PasswordItem>().apply {
+                            requireSelectionTracker().selectedItems.forEach { push(it) }
+                        }
+                    )
                     mode.finish() // Action picked, so close the CAB
                     return true
                 }
                 R.id.menu_edit_password -> {
-                    activity.editPassword(values[selectedItems.iterator().next()])
+                    activity.editPassword(requireSelectionTracker().selectedItems.first())
                     mode.finish()
                     return true
                 }
                 R.id.menu_move_password -> {
-                    val selectedPasswords = ArrayList<PasswordItem>()
-                    for (id in selectedItems) {
-                        selectedPasswords.add(values[id])
-                    }
-                    activity.movePasswords(selectedPasswords)
+                    activity.movePasswords(requireSelectionTracker().selectedItems)
                     return false
                 }
                 else -> return false
@@ -67,54 +73,27 @@ class PasswordRecyclerAdapter(
 
         // Called when the user exits the action mode
         override fun onDestroyActionMode(mode: ActionMode) {
-            val it = selectedItems.iterator()
-            while (it.hasNext()) {
-                // need the setSelected line in onBind
-                notifyItemChanged(it.next())
-                it.remove()
-            }
+            requireSelectionTracker().selection.forEach { notifyItemChanged(it.toInt()) }
             actionMode = null
             // show the fab
             activity.findViewById<View>(R.id.fab).visibility = View.VISIBLE
         }
     }
 
-    override fun getOnLongClickListener(holder: ViewHolder, pass: PasswordItem): View.OnLongClickListener {
-        return View.OnLongClickListener {
-            if (actionMode != null) {
-                return@OnLongClickListener false
-            }
-            toggleSelection(holder.adapterPosition)
-            canEdit = pass.type == PasswordItem.TYPE_PASSWORD
-            // Start the CAB using the ActionMode.Callback
-            actionMode = activity.startSupportActionMode(actionModeCallback)
-            actionMode?.title = "" + selectedItems.size
-            actionMode?.invalidate()
-            notifyItemChanged(holder.adapterPosition)
-            true
-        }
+    override fun onItemClicked(holder: PasswordItemViewHolder, item: PasswordItem) {
+        listener.onFragmentInteraction(item)
     }
 
-    override fun getOnClickListener(holder: ViewHolder, pass: PasswordItem): View.OnClickListener {
-        return View.OnClickListener {
-            if (actionMode != null) {
-                toggleSelection(holder.adapterPosition)
-                actionMode?.title = "" + selectedItems.size
-                if (selectedItems.isEmpty()) {
-                    actionMode?.finish()
-                } else if (selectedItems.size == 1 && (canEdit.not())) {
-                    if (values[selectedItems.iterator().next()].type == PasswordItem.TYPE_PASSWORD) {
-                        canEdit = true
-                        actionMode?.invalidate()
-                    }
-                } else if (selectedItems.size >= 1 && canEdit) {
-                    canEdit = false
-                    actionMode?.invalidate()
-                }
-            } else {
-                listener.onFragmentInteraction(pass)
-            }
-            notifyItemChanged(holder.adapterPosition)
+    override fun onSelectionChanged() {
+        actionMode?.let {
+            if (!requireSelectionTracker().hasSelection())
+                it.finish()
+            else
+                it.invalidate()
+        } ?: run {
+            actionMode = activity.startSupportActionMode(actionModeCallback)
+            actionMode?.title = "${requireSelectionTracker().selection.size()}"
+            actionMode?.invalidate()
         }
     }
 }

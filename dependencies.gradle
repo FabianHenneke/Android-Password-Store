@@ -41,7 +41,8 @@ ext.deps = [
         local_broadcast_manager: 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0-alpha01',
         material: 'com.google.android.material:material:1.2.0-alpha05',
         preference: 'androidx.preference:preference:1.1.0',
-        recycler_view: 'androidx.recyclerview:recyclerview:1.2.0-alpha01',
+        recycler_view: 'androidx.recyclerview:recyclerview:1.2.0-alpha02',
+        recycler_view_selection: 'androidx.recyclerview:recyclerview-selection:1.1.0-rc01',
         swiperefreshlayout: 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0-beta01'
     ],
 

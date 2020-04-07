@@ -4,20 +4,16 @@
  */
 package com.zeapo.pwdstore.ui.adapters
 
-import android.view.View
+import androidx.recyclerview.selection.SelectionTracker
 import com.zeapo.pwdstore.SelectFolderFragment
 import com.zeapo.pwdstore.utils.PasswordItem
-import java.util.ArrayList
 
 class FolderRecyclerAdapter(
-    private val listener: SelectFolderFragment.OnFragmentInteractionListener,
-    values: ArrayList<PasswordItem>
-) : EntryRecyclerAdapter(values) {
+    private val listener: SelectFolderFragment.OnFragmentInteractionListener
+) : EntryRecyclerAdapter() {
 
-    override fun getOnClickListener(holder: ViewHolder, pass: PasswordItem): View.OnClickListener {
-        return View.OnClickListener {
-            listener.onFragmentInteraction(pass)
-            notifyItemChanged(holder.adapterPosition)
-        }
+    override fun onItemClicked(holder: PasswordItemViewHolder, item: PasswordItem) {
+        listener.onFragmentInteraction(item)
+        notifyItemChanged(holder.absoluteAdapterPosition)
     }
 }
