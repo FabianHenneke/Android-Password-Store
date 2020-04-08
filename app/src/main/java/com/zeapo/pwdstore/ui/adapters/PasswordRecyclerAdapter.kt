@@ -9,7 +9,6 @@ import android.view.MenuItem
 import android.view.View
 import androidx.appcompat.view.ActionMode
 import androidx.recyclerview.selection.SelectionTracker
-import androidx.recyclerview.widget.RecyclerView
 import com.zeapo.pwdstore.PasswordFragment
 import com.zeapo.pwdstore.PasswordStore
 import com.zeapo.pwdstore.R
@@ -73,7 +72,7 @@ class PasswordRecyclerAdapter(
 
         // Called when the user exits the action mode
         override fun onDestroyActionMode(mode: ActionMode) {
-            requireSelectionTracker().selection.forEach { notifyItemChanged(it.toInt()) }
+            requireSelectionTracker().clearSelection()
             actionMode = null
             // show the fab
             activity.findViewById<View>(R.id.fab).visibility = View.VISIBLE
@@ -85,15 +84,14 @@ class PasswordRecyclerAdapter(
     }
 
     override fun onSelectionChanged() {
-        actionMode?.let {
-            if (!requireSelectionTracker().hasSelection())
-                it.finish()
-            else
-                it.invalidate()
-        } ?: run {
-            actionMode = activity.startSupportActionMode(actionModeCallback)
-            actionMode?.title = "${requireSelectionTracker().selection.size()}"
-            actionMode?.invalidate()
+        if (actionMode == null)
+            actionMode = activity.startSupportActionMode(actionModeCallback) ?: return
+
+        if (requireSelectionTracker().hasSelection()) {
+            actionMode!!.title = "${requireSelectionTracker().selection.size()}"
+            actionMode!!.invalidate()
+        } else {
+            actionMode!!.finish()
         }
     }
 }

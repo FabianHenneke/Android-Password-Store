@@ -52,15 +52,15 @@ import com.zeapo.pwdstore.utils.PasswordRepository.Companion.getRepositoryDirect
 import com.zeapo.pwdstore.utils.PasswordRepository.Companion.initialize
 import com.zeapo.pwdstore.utils.PasswordRepository.Companion.isInitialized
 import com.zeapo.pwdstore.utils.PasswordRepository.PasswordSortOrder.Companion.getSortOrder
+import java.io.File
+import java.lang.Character.UnicodeBlock
+import java.util.Stack
 import org.apache.commons.io.FileUtils
 import org.apache.commons.io.FilenameUtils
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.GitAPIException
 import org.eclipse.jgit.revwalk.RevCommit
 import timber.log.Timber
-import java.io.File
-import java.lang.Character.UnicodeBlock
-import java.util.Stack
 
 class PasswordStore : AppCompatActivity() {
 
@@ -178,7 +178,6 @@ class PasswordStore : AppCompatActivity() {
         searchView.setOnQueryTextListener(
                 object : OnQueryTextListener {
                     override fun onQueryTextSubmit(s: String): Boolean {
-                        model.search(s)
                         searchView.clearFocus()
                         return true
                     }
@@ -271,6 +270,14 @@ class PasswordStore : AppCompatActivity() {
     override fun onDestroy() {
         plist = null
         super.onDestroy()
+    }
+
+    fun clearSearch() {
+        searchItem.collapseActionView()
+    }
+
+    fun disableNavigationIndicator() {
+        supportActionBar?.setDisplayHomeAsUpEnabled(false)
     }
 
     fun openSettings(view: View?) {
@@ -385,14 +392,8 @@ class PasswordStore : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
-        if (null != plist && plist!!.isNotEmpty) {
-            plist!!.popBack()
-        } else {
+        if (plist?.onBackPressedInActivity() != true)
             super.onBackPressed()
-        }
-        if (null != plist && !plist!!.isNotEmpty) {
-            supportActionBar!!.setDisplayHomeAsUpEnabled(false)
-        }
     }
 
     private fun getRelativePath(fullPath: String, repositoryPath: String): String {
@@ -457,7 +458,7 @@ class PasswordStore : AppCompatActivity() {
         val intent = Intent(this, PgpActivity::class.java)
         intent.putExtra("NAME", item.toString())
         intent.putExtra("FILE_PATH", item.file.absolutePath)
-        intent.putExtra("PARENT_PATH", currentDir!!.absolutePath)
+        intent.putExtra("PARENT_PATH", item.file.parentFile.absolutePath)
         intent.putExtra("REPO_PATH", getRepositoryDirectory(applicationContext).absolutePath)
         intent.putExtra("OPERATION", "EDIT")
         startActivityForResult(intent, REQUEST_CODE_EDIT)
@@ -540,7 +541,7 @@ class PasswordStore : AppCompatActivity() {
 
     /** clears adapter's content and updates it with a fresh list of passwords from the root  */
     fun updateListAdapter() {
-        plist?.updateAdapter()
+        plist?.resetAdapter()
     }
 
     /** Updates the adapter with the current view of passwords  */

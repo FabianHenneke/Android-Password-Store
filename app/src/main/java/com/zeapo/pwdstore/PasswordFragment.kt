@@ -6,17 +6,14 @@ package com.zeapo.pwdstore
 
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.os.Bundle
+import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
-import androidx.preference.PreferenceManager
-import androidx.recyclerview.selection.SelectionTracker
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -28,38 +25,20 @@ import com.zeapo.pwdstore.ui.adapters.EntryRecyclerAdapter.Companion.makeTracker
 import com.zeapo.pwdstore.ui.adapters.PasswordRecyclerAdapter
 import com.zeapo.pwdstore.utils.PasswordItem
 import com.zeapo.pwdstore.utils.PasswordRepository
-import com.zeapo.pwdstore.utils.PasswordRepository.Companion.getPasswords
-import com.zeapo.pwdstore.utils.PasswordRepository.Companion.getRepositoryDirectory
-import com.zeapo.pwdstore.utils.PasswordRepository.PasswordSortOrder.Companion.getSortOrder
-import kotlinx.android.synthetic.main.password_recycler_view.*
-import me.zhanghai.android.fastscroll.FastScrollerBuilder
 import java.io.File
-import java.util.Stack
-
-/**
- * A fragment representing a list of Items.
- *
- * Large screen devices (such as tablets) are supported by replacing the ListView with a
- * GridView.
- *
- */
+import me.zhanghai.android.fastscroll.FastScrollerBuilder
 
 class PasswordFragment : Fragment() {
-    private var pathStack: Stack<File> = Stack()
-    private var scrollPosition: Stack<Int> = Stack()
     private lateinit var recyclerAdapter: PasswordRecyclerAdapter
     private lateinit var recyclerView: RecyclerView
-    private lateinit var selectionTracker: SelectionTracker<Long>
     private lateinit var listener: OnFragmentInteractionListener
-    private lateinit var settings: SharedPreferences
     private lateinit var swipeRefresher: SwipeRefreshLayout
+
+    private var recyclerViewStateToRestore: Parcelable? = null
 
     private val model: SearchableRepositoryViewModel by activityViewModels()
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        settings = PreferenceManager.getDefaultSharedPreferences(requireActivity())
-    }
+    private fun requireStore() = requireActivity() as PasswordStore
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -67,12 +46,28 @@ class PasswordFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.password_recycler_view, container, false)
-        // use a linear layout manager
-        val layoutManager = LinearLayoutManager(requireContext())
-        swipeRefresher = view.findViewById(R.id.swipe_refresher)
+        initializePasswordList(view)
+        val fab = view.findViewById<FloatingActionButton>(R.id.fab)
+        fab.setOnClickListener {
+            toggleFabExpand(fab)
+        }
+        view.findViewById<FloatingActionButton>(R.id.create_folder).setOnClickListener {
+            requireStore().createFolder()
+            toggleFabExpand(fab)
+        }
+        view.findViewById<FloatingActionButton>(R.id.create_password).setOnClickListener {
+            requireStore().createPassword()
+            toggleFabExpand(fab)
+        }
+        return view
+    }
+
+    private fun initializePasswordList(rootView: View) {
+        swipeRefresher = rootView.findViewById(R.id.swipe_refresher)
         swipeRefresher.setOnRefreshListener {
             if (!PasswordRepository.isGitRepo()) {
-                Snackbar.make(view, getString(R.string.clone_git_repo), Snackbar.LENGTH_SHORT).show()
+                Snackbar.make(rootView, getString(R.string.clone_git_repo), Snackbar.LENGTH_SHORT)
+                    .show()
                 swipeRefresher.isRefreshing = false
             } else {
                 val intent = Intent(context, GitActivity::class.java)
@@ -80,38 +75,37 @@ class PasswordFragment : Fragment() {
                 startActivityForResult(intent, GitActivity.REQUEST_SYNC)
             }
         }
-        recyclerView = view.findViewById(R.id.pass_recycler)
-        recyclerView.layoutManager = layoutManager
-        // use divider
-        recyclerView.addItemDecoration(DividerItemDecoration(requireContext(), DividerItemDecoration.VERTICAL))
-        // Set the adapter
-        recyclerAdapter =
-            PasswordRecyclerAdapter(requireActivity() as PasswordStore, listener)
 
-        recyclerView.adapter = recyclerAdapter
+        recyclerAdapter = PasswordRecyclerAdapter(requireStore(), listener)
+        recyclerView = rootView.findViewById(R.id.pass_recycler)
+        recyclerView.apply {
+            layoutManager = LinearLayoutManager(requireContext())
+            addItemDecoration(
+                DividerItemDecoration(
+                    requireContext(),
+                    DividerItemDecoration.VERTICAL
+                )
+            )
+            itemAnimator = null
+            adapter = recyclerAdapter
+        }
         recyclerAdapter.setSelectionTracker(makeTracker(recyclerView))
-        // Setup fast scroller
+
         FastScrollerBuilder(recyclerView).build()
-        val fab = view.findViewById<FloatingActionButton>(R.id.fab)
-        fab.setOnClickListener {
-            toggleFabExpand(fab)
-        }
-
-        view.findViewById<FloatingActionButton>(R.id.create_folder).setOnClickListener {
-            (requireActivity() as PasswordStore).createFolder()
-            toggleFabExpand(fab)
-        }
-
-        view.findViewById<FloatingActionButton>(R.id.create_password).setOnClickListener {
-            (requireActivity() as PasswordStore).createPassword()
-            toggleFabExpand(fab)
-        }
         registerForContextMenu(recyclerView)
-        val currentDir = File(requireNotNull(requireArguments().getString("Path")))
-        pathStack.push(currentDir)
-        model.list(currentDir)
-        model.passwordItemsList.observe(this, Observer { list -> recyclerAdapter.submitList(list) })
-        return view
+
+        val path = requireNotNull(requireArguments().getString("Path"))
+        model.navigateTo(File(path), pushPreviousLocation = false)
+        model.passwordItemsList.observe(
+            this,
+            Observer { list ->
+                recyclerAdapter.submitList(list) {
+                    recyclerViewStateToRestore?.let {
+                        recyclerView.layoutManager?.onRestoreInstanceState(it)
+                    }
+                    recyclerViewStateToRestore = null
+                }
+            })
     }
 
     private fun toggleFabExpand(fab: FloatingActionButton) = with(fab) {
@@ -126,16 +120,17 @@ class PasswordFragment : Fragment() {
             listener = object : OnFragmentInteractionListener {
                 override fun onFragmentInteraction(item: PasswordItem) {
                     if (item.type == PasswordItem.TYPE_CATEGORY) {
-                        // push the category were we're going
-                        pathStack.push(item.file)
-                        // scrollPosition.push((recyclerView.layoutManager as LinearLayoutManager).findLastCompletelyVisibleItemPosition())
-                        model.list(item.file)
-                        (requireActivity() as AppCompatActivity).supportActionBar?.setDisplayHomeAsUpEnabled(true)
+                        requireStore().clearSearch()
+                        model.navigateTo(
+                            item.file,
+                            recyclerViewState = recyclerView.layoutManager?.onSaveInstanceState()
+                        )
+                        requireStore().supportActionBar?.setDisplayHomeAsUpEnabled(true)
                     } else {
                         if (requireArguments().getBoolean("matchWith", false)) {
-                            (requireActivity() as PasswordStore).matchPasswordWithApp(item)
+                            requireStore().matchPasswordWithApp(item)
                         } else {
-                            (requireActivity() as PasswordStore).decryptPassword(item)
+                            requireStore().decryptPassword(item)
                         }
                     }
                 }
@@ -149,12 +144,24 @@ class PasswordFragment : Fragment() {
         swipeRefresher.isRefreshing = false
     }
 
+    /**
+     * Returns true if the back press was handled by the [Fragment].
+     */
+    fun onBackPressedInActivity(): Boolean {
+        if (!model.canNavigateBack)
+            return false
+        // The RecyclerView state is restored when the asynchronous update operation on the
+        // adapter is completed.
+        recyclerViewStateToRestore = model.navigateBack()
+        if (!model.canNavigateBack)
+            requireStore().disableNavigationIndicator()
+        return true
+    }
+
     /** clears the adapter content and sets it back to the root view  */
-    fun updateAdapter() {
-        pathStack.clear()
-        // scrollPosition.clear()
-        model.list()
-        (requireActivity() as AppCompatActivity).supportActionBar?.setDisplayHomeAsUpEnabled(false)
+    fun resetAdapter() {
+        model.reset()
+        requireStore().supportActionBar?.setDisplayHomeAsUpEnabled(false)
     }
 
     /** refreshes the adapter with the latest opened category  */
@@ -162,22 +169,13 @@ class PasswordFragment : Fragment() {
         model.forceRefresh()
     }
 
-    /** Goes back one level back in the path  */
-    fun popBack() {
-        if (pathStack.isEmpty()) return
-        model.list(pathStack.pop())
-    }
-
     /**
      * gets the current directory
      *
      * @return the current directory
      */
-    val currentDir: File?
-        get() = if (pathStack.isEmpty()) getRepositoryDirectory(requireContext()) else pathStack.peek()
-
-    val isNotEmpty: Boolean
-        get() = !pathStack.isEmpty()
+    val currentDir: File
+        get() = model.currentDir
 
     fun dismissActionMode() {
         recyclerAdapter.actionMode?.finish()

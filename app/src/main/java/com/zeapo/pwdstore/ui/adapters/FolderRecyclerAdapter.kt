@@ -4,7 +4,6 @@
  */
 package com.zeapo.pwdstore.ui.adapters
 
-import androidx.recyclerview.selection.SelectionTracker
 import com.zeapo.pwdstore.SelectFolderFragment
 import com.zeapo.pwdstore.utils.PasswordItem
 

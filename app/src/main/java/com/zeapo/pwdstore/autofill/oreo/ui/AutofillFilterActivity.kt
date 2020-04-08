@@ -24,10 +24,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.ajalt.timberkt.e
-import com.zeapo.pwdstore.SearchableRepositoryAdapter
 import com.zeapo.pwdstore.FilterMode
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.SearchMode
+import com.zeapo.pwdstore.SearchableRepositoryAdapter
 import com.zeapo.pwdstore.SearchableRepositoryViewModel
 import com.zeapo.pwdstore.autofill.oreo.AutofillMatcher
 import com.zeapo.pwdstore.autofill.oreo.AutofillPreferences
