@@ -96,7 +96,7 @@ class PasswordFragment : Fragment() {
 
         val path = requireNotNull(requireArguments().getString("Path"))
         model.navigateTo(File(path), pushPreviousLocation = false)
-        model.passwordItemsList.observe(this) { result ->
+        model.searchResult.observe(this) { result ->
             // Only run animations when the new list is filtered, i.e., the user submitted a search,
             // and not on folder navigations since the latter leads to too many removal animations.
             (recyclerView.itemAnimator as OnOffItemAnimator).isEnabled = result.isFiltered

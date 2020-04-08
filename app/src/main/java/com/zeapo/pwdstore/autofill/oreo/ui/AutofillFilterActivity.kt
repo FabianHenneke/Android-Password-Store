@@ -151,7 +151,7 @@ class AutofillFilterView : AppCompatActivity() {
                 listFilesOnly = true
             )
         }
-        model.passwordItemsList.observe(this) { result ->
+        model.searchResult.observe(this) { result ->
             val list = result.passwordItems
             searchableAdapter.submitList(list)
             // Switch RecyclerView out for a "no results" message if the new list is empty and

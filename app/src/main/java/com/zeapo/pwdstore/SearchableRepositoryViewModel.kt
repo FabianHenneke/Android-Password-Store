@@ -186,7 +186,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
 
     data class SearchResult(val passwordItems: List<PasswordItem>, val isFiltered: Boolean)
 
-    private val passwordItemsFlow = searchActionFlow
+    private val newResultFlow = searchActionFlow
         .mapLatest { searchAction ->
             val listResultFlow = when (searchAction.searchMode) {
                 SearchMode.RecursivelyInSubdirectories -> listFilesRecursively(searchAction.baseDirectory)
@@ -262,9 +262,9 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
             .filter { file -> shouldTake(file) }
     }
 
-    private val passwordItemsNavigation = MutableLiveData<SearchResult>()
-    val passwordItemsList = listOf(passwordItemsFlow, passwordItemsNavigation.asFlow()).merge()
-        .asLiveData(Dispatchers.IO)
+    private val cachedResult = MutableLiveData<SearchResult>()
+    val searchResult =
+        listOf(newResultFlow, cachedResult.asFlow()).merge().asLiveData(Dispatchers.IO)
 
     private val _currentDir = MutableLiveData(root)
     val currentDir = _currentDir as LiveData<File>
@@ -290,7 +290,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
                 navigationStack.push(
                     NavigationStackEntry(
                         _currentDir.value!!,
-                        passwordItemsList.value?.passwordItems,
+                        searchResult.value?.passwordItems,
                         recyclerViewState
                     )
                 )
@@ -330,7 +330,12 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
         val (oldDir, oldPasswordItems, oldRecyclerViewState) = navigationStack.pop()
         return if (oldPasswordItems != null) {
             // We cached the contents of oldDir and restore them directly without file operations.
-            passwordItemsNavigation.postValue(SearchResult(oldPasswordItems, isFiltered = false))
+            cachedResult.postValue(
+                SearchResult(
+                    oldPasswordItems,
+                    isFiltered = false
+                )
+            )
             _currentDir.postValue(oldDir)
             oldRecyclerViewState
         } else {
