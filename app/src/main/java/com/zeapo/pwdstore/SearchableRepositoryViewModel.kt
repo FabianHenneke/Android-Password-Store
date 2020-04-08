@@ -10,6 +10,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.asFlow
 import androidx.lifecycle.asLiveData
@@ -110,15 +111,6 @@ enum class SearchMode {
     InCurrentDirectoryOnly
 }
 
-private data class SearchAction(
-    val currentDir: File,
-    val filter: String,
-    val filterMode: FilterMode,
-    val searchMode: SearchMode,
-    val listFilesOnly: Boolean,
-    val updateCounter: Int
-)
-
 @ExperimentalCoroutinesApi
 @FlowPreview
 class SearchableRepositoryViewModel(application: Application) : AndroidViewModel(application) {
@@ -127,7 +119,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
     private val updateCounter: Int
         get() = _updateCounter
 
-    private fun increaseUpdateCounter() {
+    private fun forceUpdateOnNextSearchAction() {
         _updateCounter++
     }
 
@@ -144,14 +136,44 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
     private val directoryStructure = AutofillPreferences.directoryStructure(application)
     private val itemComparator = PasswordItem.makeComparator(typeSortOrder, directoryStructure)
 
+    private data class SearchAction(
+        val baseDirectory: File,
+        val filter: String,
+        val filterMode: FilterMode,
+        val searchMode: SearchMode,
+        val findFilesOnly: Boolean,
+        // This counter can be increased to force a reexecution of the search action even if all
+        // other arguments are left unchanged.
+        val updateCounter: Int
+    )
+
+    private fun makeSearchAction(
+        baseDirectory: File,
+        filter: String,
+        filterMode: FilterMode,
+        searchMode: SearchMode,
+        findFilesOnly: Boolean
+    ): SearchAction {
+        return SearchAction(
+            baseDirectory = baseDirectory,
+            filter = filter,
+            filterMode = filterMode,
+            searchMode = searchMode,
+            findFilesOnly = findFilesOnly,
+            updateCounter = updateCounter
+        )
+    }
+
+    private fun updateSearchAction(action: SearchAction) =
+        action.copy(updateCounter = updateCounter)
+
     private val searchAction = MutableLiveData(
-        SearchAction(
-            currentDir = root,
+        makeSearchAction(
+            baseDirectory = root,
             filter = "",
             filterMode = FilterMode.NoFilter,
             searchMode = SearchMode.InCurrentDirectoryOnly,
-            listFilesOnly = true,
-            updateCounter = updateCounter
+            findFilesOnly = true
         )
     )
     private val searchActionFlow = searchAction.asFlow()
@@ -161,11 +183,11 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
     private val passwordItemsFlow = searchActionFlow
         .mapLatest { searchAction ->
             val listResultFlow = when (searchAction.searchMode) {
-                SearchMode.RecursivelyInSubdirectories -> listFilesRecursively(searchAction.currentDir)
-                SearchMode.InCurrentDirectoryOnly -> listFiles(searchAction.currentDir)
+                SearchMode.RecursivelyInSubdirectories -> listFilesRecursively(searchAction.baseDirectory)
+                SearchMode.InCurrentDirectoryOnly -> listFiles(searchAction.baseDirectory)
             }
             val prefilteredResultFlow =
-                if (searchAction.listFilesOnly) listResultFlow.filter { it.isFile } else listResultFlow
+                if (searchAction.findFilesOnly) listResultFlow.filter { it.isFile } else listResultFlow
             val filterModeToUse =
                 if (searchAction.filter == "") FilterMode.NoFilter else searchAction.filterMode
             when (filterModeToUse) {
@@ -176,7 +198,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
                         .sortedWith(itemComparator)
                 }
                 FilterMode.StrictDomain -> {
-                    check(searchAction.listFilesOnly) { "Searches with StrictDomain search mode can only list files" }
+                    check(searchAction.findFilesOnly) { "Searches with StrictDomain search mode can only list files" }
                     prefilteredResultFlow
                         .filter { file ->
                             val toMatch =
@@ -237,8 +259,8 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
     val passwordItemsList = listOf(passwordItemsFlow, passwordItemsNavigation.asFlow()).merge()
         .asLiveData(Dispatchers.IO)
 
-    var currentDir = root
-        private set
+    private val _currentDir = MutableLiveData(root)
+    val currentDir = _currentDir as LiveData<File>
 
     data class NavigationStackEntry(
         val dir: File,
@@ -257,28 +279,34 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
         if (pushPreviousLocation) {
             // We cache the current list entries only if the current list has not been filtered,
             // otherwise it will be regenerated when moving back.
-            if (searchAction.value?.filterMode == FilterMode.NoFilter)
+            if (searchAction.value?.filterMode == FilterMode.NoFilter) {
                 navigationStack.push(
                     NavigationStackEntry(
-                        currentDir,
+                        _currentDir.value!!,
                         passwordItemsList.value,
                         recyclerViewState
                     )
                 )
-            else
-                navigationStack.push(NavigationStackEntry(currentDir, null, recyclerViewState))
+            } else {
+                navigationStack.push(
+                    NavigationStackEntry(
+                        _currentDir.value!!,
+                        null,
+                        recyclerViewState
+                    )
+                )
+            }
         }
-        currentDir = newDirectory
         searchAction.postValue(
-            SearchAction(
+            makeSearchAction(
                 filter = "",
-                currentDir = currentDir,
+                baseDirectory = newDirectory,
                 filterMode = FilterMode.NoFilter,
                 searchMode = SearchMode.InCurrentDirectoryOnly,
-                listFilesOnly = false,
-                updateCounter = updateCounter
+                findFilesOnly = false
             )
         )
+        _currentDir.postValue(newDirectory)
     }
 
     val canNavigateBack
@@ -288,7 +316,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
      * Navigate back to the last location on the [navigationStack] using a cached list of entries
      * if possible.
      *
-     * Returns the old RecyclerView state as a [Parcelable] if it was cached.
+     * Returns the old RecyclerView's LinearLayoutManager state as a [Parcelable] if it was cached.
      */
     fun navigateBack(): Parcelable? {
         if (!canNavigateBack) return null
@@ -296,7 +324,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
         return if (oldPasswordItems != null) {
             // We cached the contents of oldDir and restore them directly without file operations.
             passwordItemsNavigation.postValue(oldPasswordItems)
-            currentDir = oldDir
+            _currentDir.postValue(oldDir)
             oldRecyclerViewState
         } else {
             navigateTo(oldDir, pushPreviousLocation = false)
@@ -306,31 +334,32 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
 
     fun reset() {
         navigationStack.clear()
+        forceUpdateOnNextSearchAction()
         navigateTo(pushPreviousLocation = false)
     }
 
     fun search(
         filter: String,
-        currentDir: File? = null,
+        baseDirectory: File? = null,
         filterMode: FilterMode = FilterMode.Fuzzy,
         searchMode: SearchMode? = null,
         listFilesOnly: Boolean = false
     ) {
-        require(currentDir?.isDirectory != false) { "Can only search in a directory" }
-        val action = SearchAction(
-            filter = filter.trim(),
-            currentDir = currentDir ?: searchAction.value!!.currentDir,
-            filterMode = filterMode,
-            searchMode = searchMode ?: defaultSearchMode,
-            listFilesOnly = listFilesOnly,
-            updateCounter = updateCounter
+        require(baseDirectory?.isDirectory != false) { "Can only search in a directory" }
+        searchAction.postValue(
+            makeSearchAction(
+                filter = filter.trim(),
+                baseDirectory = baseDirectory ?: _currentDir.value!!,
+                filterMode = filterMode,
+                searchMode = searchMode ?: defaultSearchMode,
+                findFilesOnly = listFilesOnly
+            )
         )
-        searchAction.postValue(action)
     }
 
     fun forceRefresh() {
-        increaseUpdateCounter()
-        searchAction.postValue(searchAction.value!!.copy(updateCounter = updateCounter))
+        forceUpdateOnNextSearchAction()
+        searchAction.postValue(updateSearchAction(searchAction.value!!))
     }
 }
 

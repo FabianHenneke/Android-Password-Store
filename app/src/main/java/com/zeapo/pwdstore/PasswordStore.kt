@@ -31,6 +31,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.observe
 import androidx.preference.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -113,6 +114,16 @@ class PasswordStore : AppCompatActivity() {
         }
         super.onCreate(savedInstance)
         setContentView(R.layout.activity_pwdstore)
+
+        model.currentDir.observe(this) {
+            val basePath = getRepositoryDirectory(applicationContext).absoluteFile
+            supportActionBar!!.apply {
+                if (it != basePath)
+                    title = it.name
+                else
+                    setTitle(R.string.app_name)
+            }
+        }
     }
 
     public override fun onResume() {
@@ -172,7 +183,6 @@ class PasswordStore : AppCompatActivity() {
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        // Inflate the menu; this adds items to the action bar if it is present.
         searchItem = menu.findItem(R.id.action_search)
         searchView = searchItem.actionView as SearchView
         searchView.setOnQueryTextListener(
@@ -193,7 +203,7 @@ class PasswordStore : AppCompatActivity() {
         searchItem.setOnActionExpandListener(
                 object : OnActionExpandListener {
                     override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
-                        refreshListAdapter()
+                        refreshPasswordList()
                         return true
                     }
 
@@ -257,7 +267,7 @@ class PasswordStore : AppCompatActivity() {
                 return true
             }
             R.id.refresh -> {
-                updateListAdapter()
+                resetPasswordList()
                 return true
             }
             android.R.id.home -> onBackPressed()
@@ -274,10 +284,6 @@ class PasswordStore : AppCompatActivity() {
 
     fun clearSearch() {
         searchItem.collapseActionView()
-    }
-
-    fun disableNavigationIndicator() {
-        supportActionBar?.setDisplayHomeAsUpEnabled(false)
     }
 
     fun openSettings(view: View?) {
@@ -489,7 +495,7 @@ class PasswordStore : AppCompatActivity() {
     fun createPassword() {
         if (!validateState()) return
         val currentDir = currentDir
-        Timber.tag(TAG).i("Adding file to : ${currentDir!!.absolutePath}")
+        Timber.tag(TAG).i("Adding file to : ${currentDir.absolutePath}")
         val intent = Intent(this, PgpActivity::class.java)
         intent.putExtra("FILE_PATH", currentDir.absolutePath)
         intent.putExtra("REPO_PATH", getRepositoryDirectory(applicationContext).absolutePath)
@@ -499,13 +505,13 @@ class PasswordStore : AppCompatActivity() {
 
     fun createFolder() {
         if (!validateState()) return
-        FolderCreationDialogFragment.newInstance(currentDir!!.path).show(supportFragmentManager, null)
+        FolderCreationDialogFragment.newInstance(currentDir.path).show(supportFragmentManager, null)
     }
 
     // deletes passwords in order from top to bottom
     fun deletePasswords(adapter: PasswordRecyclerAdapter, selectedItems: Stack<PasswordItem>) {
         if (selectedItems.isEmpty()) {
-            refreshListAdapter()
+            refreshPasswordList()
             return
         }
         val item = selectedItems.pop()
@@ -539,17 +545,27 @@ class PasswordStore : AppCompatActivity() {
         startActivityForResult(intent, REQUEST_CODE_SELECT_FOLDER)
     }
 
-    /** clears adapter's content and updates it with a fresh list of passwords from the root  */
-    fun updateListAdapter() {
+    /**
+     * Resets navigation to the repository root and refreshes the password list accordingly.
+     *
+     * Use this rather than [refreshPasswordList] after major file system operations that may remove
+     * the current directory and thus require a full reset of the navigation stack.
+     */
+    fun resetPasswordList() {
         plist?.resetAdapter()
     }
 
-    /** Updates the adapter with the current view of passwords  */
-    private fun refreshListAdapter() {
+    /**
+     * Refreshes the password list by re-executing the last navigation or search action.
+     *
+     * Use this rather than [resetPasswordList] after file system operations limited to the current
+     * folder since it preserves the scroll position and navigation stack.
+     */
+    fun refreshPasswordList() {
         plist?.refreshAdapter()
     }
 
-    private val currentDir: File?
+    private val currentDir: File
         get() = plist?.currentDir ?: getRepositoryDirectory(applicationContext)
 
     private fun commitChange(message: String) {
@@ -577,14 +593,14 @@ class PasswordStore : AppCompatActivity() {
                                             data.extras!!.getString("LONG_NAME")))
                         }
                     }
-                    refreshListAdapter()
+                    refreshPasswordList()
                 }
                 REQUEST_CODE_ENCRYPT -> {
                     commitChange(this.resources
                             .getString(
                                     R.string.git_commit_add_text,
                                     data!!.extras!!.getString("LONG_NAME")))
-                    refreshListAdapter()
+                    refreshPasswordList()
                 }
                 REQUEST_CODE_EDIT -> {
                     commitChange(
@@ -592,10 +608,10 @@ class PasswordStore : AppCompatActivity() {
                                     .getString(
                                             R.string.git_commit_edit_text,
                                             data!!.extras!!.getString("LONG_NAME")))
-                    refreshListAdapter()
+                    refreshPasswordList()
                 }
                 GitActivity.REQUEST_INIT, NEW_REPO_BUTTON -> initializeRepositoryInfo()
-                GitActivity.REQUEST_SYNC, GitActivity.REQUEST_PULL -> updateListAdapter()
+                GitActivity.REQUEST_SYNC, GitActivity.REQUEST_PULL -> resetPasswordList()
                 HOME -> checkLocalRepository()
                 // duplicate code
                 CLONE_REPO_BUTTON -> {
@@ -676,7 +692,7 @@ class PasswordStore : AppCompatActivity() {
                                             destinationLongName))
                         }
                     }
-                    updateListAdapter()
+                    resetPasswordList()
                     if (plist != null) {
                         plist!!.dismissActionMode()
                     }

@@ -12,7 +12,7 @@ import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.Observer
+import androidx.lifecycle.observe
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -63,7 +63,9 @@ class SelectFolderFragment : Fragment() {
 
         val path = requireNotNull(requireArguments().getString("Path"))
         model.navigateTo(File(path), pushPreviousLocation = false)
-        model.passwordItemsList.observe(this, Observer { list -> recyclerAdapter.submitList(list) })
+        model.passwordItemsList.observe(this) { list ->
+            recyclerAdapter.submitList(list)
+        }
     }
 
     override fun onAttach(context: Context) {
@@ -83,13 +85,8 @@ class SelectFolderFragment : Fragment() {
         }
     }
 
-    /**
-     * gets the current directory
-     *
-     * @return the current directory
-     */
     val currentDir: File
-        get() = model.currentDir
+        get() = model.currentDir.value!!
 
     interface OnFragmentInteractionListener {
         fun onFragmentInteraction(item: PasswordItem)

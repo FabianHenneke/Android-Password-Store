@@ -13,7 +13,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.Observer
+import androidx.lifecycle.observe
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -96,16 +96,14 @@ class PasswordFragment : Fragment() {
 
         val path = requireNotNull(requireArguments().getString("Path"))
         model.navigateTo(File(path), pushPreviousLocation = false)
-        model.passwordItemsList.observe(
-            this,
-            Observer { list ->
+        model.passwordItemsList.observe(this) { list ->
                 recyclerAdapter.submitList(list) {
                     recyclerViewStateToRestore?.let {
-                        recyclerView.layoutManager?.onRestoreInstanceState(it)
+                        recyclerView.layoutManager!!.onRestoreInstanceState(it)
                     }
                     recyclerViewStateToRestore = null
                 }
-            })
+        }
     }
 
     private fun toggleFabExpand(fab: FloatingActionButton) = with(fab) {
@@ -123,7 +121,7 @@ class PasswordFragment : Fragment() {
                         requireStore().clearSearch()
                         model.navigateTo(
                             item.file,
-                            recyclerViewState = recyclerView.layoutManager?.onSaveInstanceState()
+                            recyclerViewState = recyclerView.layoutManager!!.onSaveInstanceState()
                         )
                         requireStore().supportActionBar?.setDisplayHomeAsUpEnabled(true)
                     } else {
@@ -154,7 +152,7 @@ class PasswordFragment : Fragment() {
         // adapter is completed.
         recyclerViewStateToRestore = model.navigateBack()
         if (!model.canNavigateBack)
-            requireStore().disableNavigationIndicator()
+            requireStore().supportActionBar?.setDisplayHomeAsUpEnabled(false)
         return true
     }
 
@@ -169,13 +167,8 @@ class PasswordFragment : Fragment() {
         model.forceRefresh()
     }
 
-    /**
-     * gets the current directory
-     *
-     * @return the current directory
-     */
     val currentDir: File
-        get() = model.currentDir
+        get() = model.currentDir.value!!
 
     fun dismissActionMode() {
         recyclerAdapter.actionMode?.finish()
