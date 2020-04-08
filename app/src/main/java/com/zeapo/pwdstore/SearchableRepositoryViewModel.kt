@@ -184,6 +184,8 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
         .map { it.copy(filter = it.filter.trim()) }
         .distinctUntilChanged()
 
+    data class SearchResult(val passwordItems: List<PasswordItem>, val isFiltered: Boolean)
+
     private val passwordItemsFlow = searchActionFlow
         .mapLatest { searchAction ->
             val listResultFlow = when (searchAction.searchMode) {
@@ -194,7 +196,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
                 if (searchAction.findFilesOnly) listResultFlow.filter { it.isFile } else listResultFlow
             val filterModeToUse =
                 if (searchAction.filter == "") FilterMode.NoFilter else searchAction.filterMode
-            when (filterModeToUse) {
+            val passwordList = when (filterModeToUse) {
                 FilterMode.NoFilter -> {
                     prefilteredResultFlow
                         .map { it.toPasswordItem(root) }
@@ -234,6 +236,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
                         .map { it.second }
                 }
             }
+            SearchResult(passwordList, isFiltered = searchAction.filterMode != FilterMode.NoFilter)
         }
 
     private fun shouldTake(file: File) = with(file) {
@@ -259,7 +262,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
             .filter { file -> shouldTake(file) }
     }
 
-    private val passwordItemsNavigation = MutableLiveData<List<PasswordItem>>()
+    private val passwordItemsNavigation = MutableLiveData<SearchResult>()
     val passwordItemsList = listOf(passwordItemsFlow, passwordItemsNavigation.asFlow()).merge()
         .asLiveData(Dispatchers.IO)
 
@@ -287,7 +290,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
                 navigationStack.push(
                     NavigationStackEntry(
                         _currentDir.value!!,
-                        passwordItemsList.value,
+                        passwordItemsList.value?.passwordItems,
                         recyclerViewState
                     )
                 )
@@ -327,7 +330,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
         val (oldDir, oldPasswordItems, oldRecyclerViewState) = navigationStack.pop()
         return if (oldPasswordItems != null) {
             // We cached the contents of oldDir and restore them directly without file operations.
-            passwordItemsNavigation.postValue(oldPasswordItems)
+            passwordItemsNavigation.postValue(SearchResult(oldPasswordItems, isFiltered = false))
             _currentDir.postValue(oldDir)
             oldRecyclerViewState
         } else {

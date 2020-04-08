@@ -19,8 +19,8 @@ import androidx.core.text.bold
 import androidx.core.text.buildSpannedString
 import androidx.core.text.underline
 import androidx.core.widget.addTextChangedListener
-import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.observe
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.ajalt.timberkt.e
@@ -35,11 +35,7 @@ import com.zeapo.pwdstore.autofill.oreo.DirectoryStructure
 import com.zeapo.pwdstore.autofill.oreo.FormOrigin
 import com.zeapo.pwdstore.utils.PasswordItem
 import kotlinx.android.synthetic.main.activity_oreo_autofill_filter.*
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 
-@FlowPreview
-@ExperimentalCoroutinesApi
 @TargetApi(Build.VERSION_CODES.O)
 class AutofillFilterView : AppCompatActivity() {
 
@@ -155,16 +151,16 @@ class AutofillFilterView : AppCompatActivity() {
                 listFilesOnly = true
             )
         }
-        model.passwordItemsList.observe(
-            this,
-            Observer { list ->
-                searchableAdapter.submitList(list)
-                // Switch RecyclerView out for a "no results" message if the new list is empty and
-                // the message is not yet shown (and vice versa).
-                if ((list.isEmpty() && rvPasswordSwitcher.nextView.id == rvPasswordEmpty.id) ||
-                    (list.isNotEmpty() && rvPasswordSwitcher.nextView.id == rvPassword.id))
-                    rvPasswordSwitcher.showNext()
-            })
+        model.passwordItemsList.observe(this) { result ->
+            val list = result.passwordItems
+            searchableAdapter.submitList(list)
+            // Switch RecyclerView out for a "no results" message if the new list is empty and
+            // the message is not yet shown (and vice versa).
+            if ((list.isEmpty() && rvPasswordSwitcher.nextView.id == rvPasswordEmpty.id) ||
+                (list.isNotEmpty() && rvPasswordSwitcher.nextView.id == rvPassword.id)
+            )
+                rvPasswordSwitcher.showNext()
+        }
 
         shouldMatch.text = getString(
             R.string.oreo_autofill_match_with,

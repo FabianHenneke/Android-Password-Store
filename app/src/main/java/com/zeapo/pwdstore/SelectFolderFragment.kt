@@ -62,8 +62,8 @@ class SelectFolderFragment : Fragment() {
 
         val path = requireNotNull(requireArguments().getString("Path"))
         model.navigateTo(File(path), pushPreviousLocation = false)
-        model.passwordItemsList.observe(this) { list ->
-            recyclerAdapter.submitList(list)
+        model.passwordItemsList.observe(this) { result ->
+            recyclerAdapter.submitList(result.passwordItems)
         }
     }
 

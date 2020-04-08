@@ -21,6 +21,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
 import com.zeapo.pwdstore.git.GitActivity
+import com.zeapo.pwdstore.ui.OnOffItemAnimator
 import com.zeapo.pwdstore.ui.adapters.PasswordRecyclerAdapter
 import com.zeapo.pwdstore.utils.PasswordItem
 import com.zeapo.pwdstore.utils.PasswordRepository
@@ -85,7 +86,7 @@ class PasswordFragment : Fragment() {
                     DividerItemDecoration.VERTICAL
                 )
             )
-            itemAnimator = null
+            itemAnimator = OnOffItemAnimator()
             adapter = recyclerAdapter
         }
         recyclerAdapter.makeSelectable(recyclerView)
@@ -95,13 +96,16 @@ class PasswordFragment : Fragment() {
 
         val path = requireNotNull(requireArguments().getString("Path"))
         model.navigateTo(File(path), pushPreviousLocation = false)
-        model.passwordItemsList.observe(this) { list ->
-                recyclerAdapter.submitList(list) {
-                    recyclerViewStateToRestore?.let {
-                        recyclerView.layoutManager!!.onRestoreInstanceState(it)
-                    }
-                    recyclerViewStateToRestore = null
+        model.passwordItemsList.observe(this) { result ->
+            // Only run animations when the new list is filtered, i.e., the user submitted a search,
+            // and not on folder navigations since the latter leads to too many removal animations.
+            (recyclerView.itemAnimator as OnOffItemAnimator).isEnabled = result.isFiltered
+            recyclerAdapter.submitList(result.passwordItems) {
+                recyclerViewStateToRestore?.let {
+                    recyclerView.layoutManager!!.onRestoreInstanceState(it)
                 }
+                recyclerViewStateToRestore = null
+            }
         }
     }
 
