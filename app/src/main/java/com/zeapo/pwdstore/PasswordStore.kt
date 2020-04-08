@@ -267,7 +267,7 @@ class PasswordStore : AppCompatActivity() {
                 return true
             }
             R.id.refresh -> {
-                resetPasswordList()
+                refreshPasswordList()
                 return true
             }
             android.R.id.home -> onBackPressed()
