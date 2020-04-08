@@ -156,17 +156,6 @@ class PasswordFragment : Fragment() {
         return true
     }
 
-    /** clears the adapter content and sets it back to the root view  */
-    fun resetAdapter() {
-        model.reset()
-        requireStore().supportActionBar?.setDisplayHomeAsUpEnabled(false)
-    }
-
-    /** refreshes the adapter with the latest opened category  */
-    fun refreshAdapter() {
-        model.forceRefresh()
-    }
-
     val currentDir: File
         get() = model.currentDir.value!!
 

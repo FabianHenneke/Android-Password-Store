@@ -410,6 +410,7 @@ open class SearchableRepositoryAdapter<T : RecyclerView.ViewHolder>(
         setHasStableIds(true)
     }
 
+    // We should not call setHasStableIds in the constructor without making it final.
     final override fun setHasStableIds(hasStableIds: Boolean) = super.setHasStableIds(hasStableIds)
 
     final override fun getItemId(position: Int) = position.toLong()

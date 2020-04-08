@@ -552,7 +552,8 @@ class PasswordStore : AppCompatActivity() {
      * the current directory and thus require a full reset of the navigation stack.
      */
     fun resetPasswordList() {
-        plist?.resetAdapter()
+        model.reset()
+        supportActionBar!!.setDisplayHomeAsUpEnabled(false)
     }
 
     /**
@@ -562,7 +563,7 @@ class PasswordStore : AppCompatActivity() {
      * folder since it preserves the scroll position and navigation stack.
      */
     fun refreshPasswordList() {
-        plist?.refreshAdapter()
+        model.forceRefresh()
     }
 
     private val currentDir: File
