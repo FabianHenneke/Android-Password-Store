@@ -330,12 +330,7 @@ class SearchableRepositoryViewModel(application: Application) : AndroidViewModel
         val (oldDir, oldPasswordItems, oldRecyclerViewState) = navigationStack.pop()
         return if (oldPasswordItems != null) {
             // We cached the contents of oldDir and restore them directly without file operations.
-            cachedResult.postValue(
-                SearchResult(
-                    oldPasswordItems,
-                    isFiltered = false
-                )
-            )
+            cachedResult.postValue(SearchResult(oldPasswordItems, isFiltered = false))
             _currentDir.postValue(oldDir)
             oldRecyclerViewState
         } else {
