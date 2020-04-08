@@ -15,6 +15,7 @@ import androidx.recyclerview.selection.ItemDetailsLookup
 import androidx.recyclerview.widget.RecyclerView
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.SearchableRepositoryAdapter
+import com.zeapo.pwdstore.stableId
 import com.zeapo.pwdstore.utils.PasswordItem
 import java.io.File
 
@@ -25,9 +26,8 @@ open class EntryRecyclerAdapter :
         PasswordItemViewHolder::bind
     ) {
 
-    companion object {
-        fun makeTracker(recyclerView: RecyclerView) =
-            makeTracker(recyclerView, ::PasswordItemDetailsLookup)
+    fun makeSelectable(recyclerView: RecyclerView) {
+        makeSelectable(recyclerView, ::PasswordItemDetailsLookup)
     }
 
     class PasswordItemViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -36,6 +36,7 @@ open class EntryRecyclerAdapter :
         private val childCount: AppCompatTextView = itemView.findViewById(R.id.child_count)
         private val folderIndicator: AppCompatImageView =
             itemView.findViewById(R.id.folder_indicator)
+        lateinit var itemDetails: ItemDetailsLookup.ItemDetails<String>
 
         fun bind(item: PasswordItem) {
             val settings =
@@ -61,17 +62,16 @@ open class EntryRecyclerAdapter :
                 childCount.visibility = View.GONE
                 folderIndicator.visibility = View.GONE
             }
-        }
-
-        val itemDetails = object : ItemDetailsLookup.ItemDetails<Long>() {
-            override fun getSelectionKey() = itemId
-            override fun getPosition() = absoluteAdapterPosition
+            itemDetails = object : ItemDetailsLookup.ItemDetails<String>() {
+                override fun getPosition() = absoluteAdapterPosition
+                override fun getSelectionKey() = item.stableId
+            }
         }
     }
 
     class PasswordItemDetailsLookup(private val recyclerView: RecyclerView) :
-        ItemDetailsLookup<Long>() {
-        override fun getItemDetails(event: MotionEvent): ItemDetails<Long>? {
+        ItemDetailsLookup<String>() {
+        override fun getItemDetails(event: MotionEvent): ItemDetails<String>? {
             val view = recyclerView.findChildViewUnder(event.x, event.y) ?: return null
             return (recyclerView.getChildViewHolder(view) as PasswordItemViewHolder).itemDetails
         }

@@ -5,6 +5,7 @@
 package com.zeapo.pwdstore
 
 import android.app.Application
+import android.content.Context
 import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
@@ -16,9 +17,9 @@ import androidx.lifecycle.asFlow
 import androidx.lifecycle.asLiveData
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.selection.ItemDetailsLookup
+import androidx.recyclerview.selection.ItemKeyProvider
 import androidx.recyclerview.selection.SelectionPredicates
 import androidx.recyclerview.selection.SelectionTracker
-import androidx.recyclerview.selection.StableIdKeyProvider
 import androidx.recyclerview.selection.StorageStrategy
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -99,6 +100,9 @@ private fun PasswordItem.Companion.makeComparator(
         })
         .then(compareBy(CaseInsensitiveComparator) { directoryStructure.getUsernameFor(it.file) })
 }
+
+val PasswordItem.stableId: String
+    get() = file.absolutePath
 
 enum class FilterMode {
     NoFilter,
@@ -376,44 +380,45 @@ open class SearchableRepositoryAdapter<T : RecyclerView.ViewHolder>(
     private val viewHolderBinder: T.(item: PasswordItem) -> Unit
 ) : ListAdapter<PasswordItem, T>(PasswordItemDiffCallback), PopupTextProvider {
 
-    companion object {
-        fun <T : ItemDetailsLookup<Long>> makeTracker(
-            recyclerView: RecyclerView,
-            itemDetailsLookupCreator: (recyclerView: RecyclerView) -> T
-        ): SelectionTracker<Long> {
-            return SelectionTracker.Builder(
-                "SearchableRepositoryAdapter",
-                recyclerView,
-                StableIdKeyProvider(recyclerView),
-                itemDetailsLookupCreator(recyclerView),
-                StorageStrategy.createLongStorage()
-            ).withSelectionPredicate(SelectionPredicates.createSelectAnything()).build()
+    fun <T : ItemDetailsLookup<String>> makeSelectable(
+        recyclerView: RecyclerView,
+        itemDetailsLookupCreator: (recyclerView: RecyclerView) -> T
+    ) {
+        selectionTracker = SelectionTracker.Builder(
+            "SearchableRepositoryAdapter",
+            recyclerView,
+            itemKeyProvider,
+            itemDetailsLookupCreator(recyclerView),
+            StorageStrategy.createStringStorage()
+        ).withSelectionPredicate(SelectionPredicates.createSelectAnything()).build().apply {
+            addObserver(object : SelectionTracker.SelectionObserver<String>() {
+                override fun onSelectionChanged() {
+                    this@SearchableRepositoryAdapter.onSelectionChanged()
+                }
+            })
         }
     }
-
     open fun onItemClicked(holder: T, item: PasswordItem) {}
 
     open fun onSelectionChanged() {}
 
-    private var selectionTracker: SelectionTracker<Long>? = null
+    private val itemKeyProvider = object : ItemKeyProvider<String>(SCOPE_MAPPED) {
+        override fun getKey(position: Int) = getItem(position).stableId
+
+        override fun getPosition(key: String) =
+            (0 until itemCount).firstOrNull { getItem(it).stableId == key }
+                ?: RecyclerView.NO_POSITION
+    }
+
+    private var selectionTracker: SelectionTracker<String>? = null
     fun requireSelectionTracker() = selectionTracker!!
-    fun setSelectionTracker(value: SelectionTracker<Long>) {
-        value.addObserver(object : SelectionTracker.SelectionObserver<Long>() {
-            override fun onSelectionChanged() {
-                this@SearchableRepositoryAdapter.onSelectionChanged()
-            }
-        })
-        selectionTracker = value
+
+    private val selectedFiles
+        get() = requireSelectionTracker().selection.map { File(it) }
+    fun getSelectedItems(context: Context): List<PasswordItem> {
+        val root = PasswordRepository.getRepositoryDirectory(context)
+        return selectedFiles.map { it.toPasswordItem(root) }
     }
-
-    init {
-        setHasStableIds(true)
-    }
-
-    // We should not call setHasStableIds in the constructor without making it final.
-    final override fun setHasStableIds(hasStableIds: Boolean) = super.setHasStableIds(hasStableIds)
-
-    final override fun getItemId(position: Int) = position.toLong()
 
     final override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): T {
         val view = LayoutInflater.from(parent.context)
@@ -425,7 +430,7 @@ open class SearchableRepositoryAdapter<T : RecyclerView.ViewHolder>(
         val item = getItem(position)
         holder.apply {
             viewHolderBinder.invoke(this, item)
-            selectionTracker?.let { itemView.isSelected = it.isSelected(position.toLong()) }
+            selectionTracker?.let { itemView.isSelected = it.isSelected(item.stableId) }
             itemView.setOnClickListener {
                 // Do not emit custom click events while the user is selecting items.
                 if (selectionTracker?.hasSelection() != true)

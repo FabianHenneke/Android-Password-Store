@@ -8,7 +8,6 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import androidx.appcompat.view.ActionMode
-import androidx.recyclerview.selection.SelectionTracker
 import com.zeapo.pwdstore.PasswordFragment
 import com.zeapo.pwdstore.PasswordStore
 import com.zeapo.pwdstore.R
@@ -19,9 +18,6 @@ class PasswordRecyclerAdapter(
     private val activity: PasswordStore,
     private val listener: PasswordFragment.OnFragmentInteractionListener
 ) : EntryRecyclerAdapter() {
-
-    private val SelectionTracker<Long>.selectedItems: List<PasswordItem>
-        get() = selection.map { getItem(it.toInt()) }
 
     var actionMode: ActionMode? = null
     private val actionModeCallback = object : ActionMode.Callback {
@@ -39,7 +35,7 @@ class PasswordRecyclerAdapter(
         // may be called multiple times if the mode is invalidated.
         override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
             menu.findItem(R.id.menu_edit_password).isVisible =
-                requireSelectionTracker().selectedItems.map { it.type == PasswordItem.TYPE_PASSWORD }
+                getSelectedItems(activity).map { it.type == PasswordItem.TYPE_PASSWORD }
                     .singleOrNull() == true
             return true // Return false if nothing is done
         }
@@ -51,19 +47,19 @@ class PasswordRecyclerAdapter(
                     activity.deletePasswords(
                         this@PasswordRecyclerAdapter,
                         Stack<PasswordItem>().apply {
-                            requireSelectionTracker().selectedItems.forEach { push(it) }
+                            getSelectedItems(activity).forEach { push(it) }
                         }
                     )
                     mode.finish() // Action picked, so close the CAB
                     return true
                 }
                 R.id.menu_edit_password -> {
-                    activity.editPassword(requireSelectionTracker().selectedItems.first())
+                    activity.editPassword(getSelectedItems(activity).first())
                     mode.finish()
                     return true
                 }
                 R.id.menu_move_password -> {
-                    activity.movePasswords(requireSelectionTracker().selectedItems)
+                    activity.movePasswords(getSelectedItems(activity))
                     return false
                 }
                 else -> return false

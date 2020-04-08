@@ -21,7 +21,6 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
 import com.zeapo.pwdstore.git.GitActivity
-import com.zeapo.pwdstore.ui.adapters.EntryRecyclerAdapter.Companion.makeTracker
 import com.zeapo.pwdstore.ui.adapters.PasswordRecyclerAdapter
 import com.zeapo.pwdstore.utils.PasswordItem
 import com.zeapo.pwdstore.utils.PasswordRepository
@@ -89,7 +88,7 @@ class PasswordFragment : Fragment() {
             itemAnimator = null
             adapter = recyclerAdapter
         }
-        recyclerAdapter.setSelectionTracker(makeTracker(recyclerView))
+        recyclerAdapter.makeSelectable(recyclerView)
 
         FastScrollerBuilder(recyclerView).build()
         registerForContextMenu(recyclerView)

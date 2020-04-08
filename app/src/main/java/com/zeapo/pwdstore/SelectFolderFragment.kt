@@ -17,7 +17,6 @@ import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.zeapo.pwdstore.ui.adapters.EntryRecyclerAdapter
 import com.zeapo.pwdstore.ui.adapters.FolderRecyclerAdapter
 import com.zeapo.pwdstore.utils.PasswordItem
 import java.io.File
@@ -56,7 +55,7 @@ class SelectFolderFragment : Fragment() {
             itemAnimator = null
             adapter = recyclerAdapter
         }
-        recyclerAdapter.setSelectionTracker(EntryRecyclerAdapter.makeTracker(recyclerView))
+        recyclerAdapter.makeSelectable(recyclerView)
 
         FastScrollerBuilder(recyclerView).build()
         registerForContextMenu(recyclerView)
