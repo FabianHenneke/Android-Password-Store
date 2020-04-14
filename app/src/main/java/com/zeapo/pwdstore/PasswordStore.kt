@@ -554,24 +554,18 @@ class PasswordStore : AppCompatActivity() {
     }
 
     /**
-     * Resets navigation to the repository root and refreshes the password list accordingly.
-     *
-     * Use this rather than [refreshPasswordList] after major file system operations that may remove
-     * the current directory and thus require a full reset of the navigation stack.
-     */
-    fun resetPasswordList() {
-        model.reset()
-        supportActionBar!!.setDisplayHomeAsUpEnabled(false)
-    }
-
-    /**
      * Refreshes the password list by re-executing the last navigation or search action.
      *
-     * Use this rather than [resetPasswordList] after file system operations limited to the current
-     * folder since it preserves the scroll position and navigation stack.
+     * If the former current directory no longer exists, the navigation stack is cleared and the
+     * user is navigated to the repository root.
      */
     fun refreshPasswordList() {
-        model.forceRefresh()
+        if (model.currentDir.value!!.isDirectory) {
+            model.forceRefresh()
+        } else {
+            model.reset()
+            supportActionBar!!.setDisplayHomeAsUpEnabled(false)
+        }
     }
 
     private val currentDir: File
@@ -620,7 +614,7 @@ class PasswordStore : AppCompatActivity() {
                     refreshPasswordList()
                 }
                 GitActivity.REQUEST_INIT, NEW_REPO_BUTTON -> initializeRepositoryInfo()
-                GitActivity.REQUEST_SYNC, GitActivity.REQUEST_PULL -> resetPasswordList()
+                GitActivity.REQUEST_SYNC, GitActivity.REQUEST_PULL -> refreshPasswordList()
                 HOME -> checkLocalRepository()
                 // duplicate code
                 CLONE_REPO_BUTTON -> {
@@ -701,7 +695,7 @@ class PasswordStore : AppCompatActivity() {
                                             destinationLongName))
                         }
                     }
-                    resetPasswordList()
+                    refreshPasswordList()
                     if (plist != null) {
                         plist!!.dismissActionMode()
                     }
