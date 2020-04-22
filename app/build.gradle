@@ -34,9 +34,9 @@ android {
     viewBinding.enabled = true
 
     defaultConfig {
-        applicationId versions.packageName
+        applicationId 'dev.msfjarvis.aps'
         versionCode 10701
-        versionName '1.8.0-SNAPSHOT'
+        versionName '1.7.1'
     }
 
     lintOptions {
