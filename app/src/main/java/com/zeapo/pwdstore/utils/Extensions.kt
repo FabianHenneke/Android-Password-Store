@@ -17,6 +17,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.content.getSystemService
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
+import java.security.KeyStore
+import java.security.PrivateKey
 
 infix fun Int.hasFlag(flag: Int): Boolean {
     return this and flag == flag
@@ -66,3 +68,21 @@ fun <T : View> AlertDialog.requestInputFocusOnView(@IdRes id: Int) {
 val Context.autofillManager: AutofillManager?
     @RequiresApi(Build.VERSION_CODES.O)
     get() = getSystemService()
+
+const val PROVIDER_ANDROID_KEY_STORE = "AndroidKeyStore"
+
+val androidKeystore: KeyStore by lazy {
+    KeyStore.getInstance(PROVIDER_ANDROID_KEY_STORE).apply { load(null) }
+}
+
+fun KeyStore.getPrivateKey(keyAlias: String) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+    getKey(keyAlias, null) as? PrivateKey
+} else {
+    (getEntry(keyAlias, null) as? KeyStore.PrivateKeyEntry)?.privateKey
+}
+
+fun KeyStore.getPublicKey(keyAlias: String) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+    getCertificate(keyAlias).publicKey
+} else {
+    (getEntry(keyAlias, null) as? KeyStore.PrivateKeyEntry)?.certificate?.publicKey
+}

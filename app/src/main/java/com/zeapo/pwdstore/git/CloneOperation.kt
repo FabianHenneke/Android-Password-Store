@@ -8,6 +8,7 @@ import android.app.Activity
 import android.content.Intent
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.zeapo.pwdstore.R
+import com.zeapo.pwdstore.git.config.InteractivePasswordFinder
 import org.eclipse.jgit.api.CloneCommand
 import org.eclipse.jgit.api.Git
 import java.io.File
@@ -31,31 +32,6 @@ class CloneOperation(fileDir: File, callingActivity: Activity) : GitOperation(fi
             .setCloneAllBranches(true)
             .setDirectory(repository?.workTree)
             .setURI(uri)
-        return this
-    }
-
-    /**
-     * sets the authentication for user/pwd scheme
-     *
-     * @param username the username
-     * @param password the password
-     * @return the current object
-     */
-    public override fun setAuthentication(username: String, password: String): CloneOperation {
-        super.setAuthentication(username, password)
-        return this
-    }
-
-    /**
-     * sets the authentication for the ssh-key scheme
-     *
-     * @param sshKey the ssh-key file
-     * @param username the username
-     * @param passphrase the passphrase
-     * @return the current object
-     */
-    public override fun setAuthentication(sshKey: File, username: String, passphrase: String): CloneOperation {
-        super.setAuthentication(sshKey, username, passphrase)
         return this
     }
 

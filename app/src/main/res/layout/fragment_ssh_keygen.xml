@@ -30,18 +30,25 @@
             app:singleSelection="true">
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/key_length_2048"
+                android:id="@+id/key_type_rsa_2048"
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/key_length_2048" />
+                android:text="@string/key_label_rsa_2048" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/key_length_4096"
+                android:id="@+id/key_type_rsa_3072"
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/key_length_4096" />
+                android:text="@string/key_label_rsa_3072" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/key_type_ecdsa_384"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/key_label_ecdsa_384" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
 
         <com.google.android.material.textfield.TextInputLayout

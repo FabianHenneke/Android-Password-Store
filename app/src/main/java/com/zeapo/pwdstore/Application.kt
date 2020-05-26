@@ -14,6 +14,8 @@ import androidx.preference.PreferenceManager
 import com.github.ajalt.timberkt.Timber.DebugTree
 import com.github.ajalt.timberkt.Timber.plant
 import com.haroldadmin.whatthestack.WhatTheStack
+import net.schmizz.sshj.common.SecurityUtils
+import java.security.Security
 
 @Suppress("Unused")
 class Application : android.app.Application(), SharedPreferences.OnSharedPreferenceChangeListener {

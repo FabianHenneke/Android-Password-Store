@@ -4,7 +4,11 @@
  */
 package com.zeapo.pwdstore.sshkeygen
 
+import android.os.Build
 import android.os.Bundle
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -15,19 +19,27 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.jcraft.jsch.JSch
-import com.jcraft.jsch.KeyPair
 import com.zeapo.pwdstore.R
 import com.zeapo.pwdstore.databinding.FragmentSshKeygenBinding
+import com.zeapo.pwdstore.utils.PROVIDER_ANDROID_KEY_STORE
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import net.schmizz.sshj.common.Buffer
+import net.schmizz.sshj.common.KeyType
 import java.io.File
-import java.io.FileOutputStream
+import java.security.KeyPairGenerator
+import java.security.spec.ECGenParameterSpec
+
+enum class KeyGenType(val algorithm: String, val keyLength: Int) {
+    Rsa2048(KeyProperties.KEY_ALGORITHM_RSA, 2048),
+    Rsa3072(KeyProperties.KEY_ALGORITHM_RSA, 3072),
+    Ecdsa384(KeyProperties.KEY_ALGORITHM_EC, 384)
+}
 
 class SshKeyGenFragment : Fragment() {
 
-    private var keyLength = 4096
+    private var keyType = KeyGenType.Rsa3072
     private var _binding: FragmentSshKeygenBinding? = null
     private val binding get() = _binding!!
 
@@ -46,12 +58,14 @@ class SshKeyGenFragment : Fragment() {
             generate.setOnClickListener {
                 lifecycleScope.launch { generate(passphrase.text.toString(), comment.text.toString()) }
             }
-            keyLengthGroup.check(R.id.key_length_4096)
+            keyLengthGroup.check(R.id.key_type_rsa_3072)
             keyLengthGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
                 if (isChecked) {
-                    when (checkedId) {
-                        R.id.key_length_2048 -> keyLength = 2048
-                        R.id.key_length_4096 -> keyLength = 4096
+                    keyType = when (checkedId) {
+                        R.id.key_type_rsa_2048 -> KeyGenType.Rsa2048
+                        R.id.key_type_rsa_3072 -> KeyGenType.Rsa3072
+                        R.id.key_type_ecdsa_384 -> KeyGenType.Ecdsa384
+                        else -> throw IllegalStateException("Invalid key type selection")
                     }
                 }
             }
@@ -70,17 +84,39 @@ class SshKeyGenFragment : Fragment() {
         binding.generate.text = getString(R.string.ssh_key_gen_generating_progress)
         val e = try {
             withContext(Dispatchers.IO) {
-                val kp = KeyPair.genKeyPair(JSch(), KeyPair.RSA, keyLength)
-                var file = File(requireActivity().filesDir, ".ssh_key")
-                var out = FileOutputStream(file, false)
-                if (passphrase.isNotEmpty()) {
-                    kp?.writePrivateKey(out, passphrase.toByteArray())
-                } else {
-                    kp?.writePrivateKey(out)
+                val parameterSpec = KeyGenParameterSpec.Builder(
+                    "ssh_key",
+                    KeyProperties.PURPOSE_SIGN
+                ).run {
+                    setKeySize(keyType.keyLength)
+                    when (keyType) {
+                        KeyGenType.Rsa2048, KeyGenType.Rsa3072 -> {
+                            setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                            setDigests(KeyProperties.DIGEST_SHA1)
+                        }
+                        KeyGenType.Ecdsa384 -> {
+                            setAlgorithmParameterSpec(ECGenParameterSpec("secp384r1"))
+                            setDigests(KeyProperties.DIGEST_SHA384)
+                        }
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        setUnlockedDeviceRequired(true)
+                    }
+                    build()
                 }
-                file = File(requireActivity().filesDir, ".ssh_key.pub")
-                out = FileOutputStream(file, false)
-                kp?.writePublicKey(out, comment)
+                val keyPair = KeyPairGenerator.getInstance(keyType.algorithm, PROVIDER_ANDROID_KEY_STORE).run {
+                    initialize(parameterSpec)
+                    generateKeyPair()
+                }
+                val keyType = KeyType.fromKey(keyPair.public)
+                val rawPublicKey = Buffer.PlainBuffer().run {
+                    keyType.putPubKeyIntoBuffer(keyPair.public, this)
+                    compactData
+                }
+                val encodedPublicKey = Base64.encodeToString(rawPublicKey, Base64.NO_WRAP)
+                val sshPublicKey = "$keyType $encodedPublicKey $comment"
+                File(requireActivity().filesDir, ".ssh_key").writeText("keystore")
+                File(requireActivity().filesDir, ".ssh_key.pub").writeText(sshPublicKey)
             }
             null
         } catch (e: Exception) {
