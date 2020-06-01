@@ -19,7 +19,7 @@ import com.zeapo.pwdstore.UserPreference
 import com.zeapo.pwdstore.git.config.ConnectionMode
 import com.zeapo.pwdstore.git.config.InteractivePasswordFinder
 import com.zeapo.pwdstore.git.config.SshApiSessionFactory
-import com.zeapo.pwdstore.git.config.SshAuthData
+import com.zeapo.pwdstore.git.config.SshAuthDatum
 import com.zeapo.pwdstore.git.config.SshjSessionFactory
 import com.zeapo.pwdstore.utils.PasswordRepository
 import com.zeapo.pwdstore.utils.getEncryptedPrefs
@@ -143,23 +143,24 @@ abstract class GitOperation(gitDir: File, internal val callingActivity: Activity
         }
     }
 
-    private fun withPasswordAuthentication(username: String, passwordFinder: InteractivePasswordFinder): GitOperation {
-        val sessionFactory = SshjSessionFactory(username, SshAuthData.Password(passwordFinder), hostKeyFile)
+    private fun registerSshjSessionFactory(username: String, authBlock: SshjSessionFactory.() -> Unit): GitOperation {
+        val sessionFactory = SshjSessionFactory(username, hostKeyFile)
         SshSessionFactory.setInstance(sessionFactory)
-        this.provider = PasswordFinderCredentialsProvider(username, passwordFinder)
+        sessionFactory.apply(authBlock)
         return this
     }
 
-    private fun withPublicKeyAuthentication(username: String, passphraseFinder: InteractivePasswordFinder): GitOperation {
-        val sessionFactory = SshjSessionFactory(username, SshAuthData.PublicKeyFile(sshKeyFile, passphraseFinder), hostKeyFile)
-        SshSessionFactory.setInstance(sessionFactory)
-        this.provider = null
-        return this
+    private fun SshjSessionFactory.addPasswordAuthentication(username: String, passwordFinder: InteractivePasswordFinder) {
+        addAuthDatum(SshAuthDatum.Password(passwordFinder))
+        this@GitOperation.provider = PasswordFinderCredentialsProvider(username, passwordFinder)
+    }
+
+    private fun SshjSessionFactory.addPublicKeyAuthentication(passphraseFinder: InteractivePasswordFinder) {
+        addAuthDatum(SshAuthDatum.PublicKeyFile(sshKeyFile, passphraseFinder))
     }
 
     private fun withOpenKeychainAuthentication(username: String, identity: SshApiSessionFactory.ApiIdentity?): GitOperation {
         SshSessionFactory.setInstance(SshApiSessionFactory(username, identity))
-        this.provider = null
         return this
     }
 
@@ -202,13 +203,19 @@ abstract class GitOperation(gitDir: File, internal val callingActivity: Activity
                         callingActivity.finish()
                     }.show()
             } else {
-                withPublicKeyAuthentication(username, GitOperationCredentialFinder(callingActivity,
-                    connectionMode)).execute()
+                registerSshjSessionFactory(username) {
+                    addPublicKeyAuthentication(GitOperationCredentialFinder(callingActivity,
+                        connectionMode))
+                    addPasswordAuthentication(username, GitOperationCredentialFinder(callingActivity,
+                        ConnectionMode.Password))
+                }.execute()
             }
             ConnectionMode.OpenKeychain -> withOpenKeychainAuthentication(username, identity).execute()
-            ConnectionMode.Password -> withPasswordAuthentication(
-                username, GitOperationCredentialFinder(callingActivity, connectionMode)).execute()
-            ConnectionMode.None -> execute()
+            ConnectionMode.Password -> registerSshjSessionFactory(username) {
+                addPasswordAuthentication(
+                    username, GitOperationCredentialFinder(callingActivity, connectionMode))
+            }.execute()
+            ConnectionMode.None -> registerSshjSessionFactory(username) {}.execute()
         }
     }
 

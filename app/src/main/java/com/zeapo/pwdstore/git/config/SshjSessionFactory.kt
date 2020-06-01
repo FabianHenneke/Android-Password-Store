@@ -32,9 +32,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.suspendCoroutine
 
-sealed class SshAuthData {
-    class Password(val passwordFinder: InteractivePasswordFinder) : SshAuthData()
-    class PublicKeyFile(val keyFile: File, val passphraseFinder: InteractivePasswordFinder) : SshAuthData()
+sealed class SshAuthDatum {
+    class Password(val passwordFinder: InteractivePasswordFinder) : SshAuthDatum()
+    class PublicKeyFile(val keyFile: File, val passphraseFinder: InteractivePasswordFinder) : SshAuthDatum()
 }
 
 abstract class InteractivePasswordFinder : PasswordFinder {
@@ -62,10 +62,16 @@ abstract class InteractivePasswordFinder : PasswordFinder {
     final override fun shouldRetry(resource: Resource<*>?) = shouldRetry
 }
 
-class SshjSessionFactory(private val username: String, private val authData: SshAuthData, private val hostKeyFile: File) : SshSessionFactory() {
+class SshjSessionFactory(private val username: String, private val hostKeyFile: File) : SshSessionFactory() {
+
+    private val authData: MutableList<SshAuthDatum> = mutableListOf()
+
+    fun addAuthDatum(authDatum: SshAuthDatum) {
+        authData.add(authDatum)
+    }
 
     override fun getSession(uri: URIish, credentialsProvider: CredentialsProvider?, fs: FS?, tms: Int): RemoteSession {
-        return SshjSession(uri, username, authData, hostKeyFile).connect()
+        return SshjSession(uri, username, hostKeyFile, authData).connect()
     }
 }
 
@@ -91,7 +97,7 @@ private fun makeTofuHostKeyVerifier(hostKeyFile: File): HostKeyVerifier {
     }
 }
 
-private class SshjSession(private val uri: URIish, private val username: String, private val authData: SshAuthData, private val hostKeyFile: File) : RemoteSession {
+private class SshjSession(private val uri: URIish, private val username: String, private val hostKeyFile: File, private val authData: List<SshAuthDatum>) : RemoteSession {
 
     private lateinit var ssh: SSHClient
     private var currentCommand: Session? = null
@@ -102,12 +108,17 @@ private class SshjSession(private val uri: URIish, private val username: String,
         ssh.connect(uri.host, uri.port.takeUnless { it == -1 } ?: 22)
         if (!ssh.isConnected)
             throw IOException()
-        when (authData) {
-            is SshAuthData.Password -> {
-                ssh.authPassword(username, authData.passwordFinder)
-            }
-            is SshAuthData.PublicKeyFile -> {
-                ssh.authPublickey(username, ssh.loadKeys(authData.keyFile.absolutePath, authData.passphraseFinder))
+        for (authDatum in authData) {
+            if (ssh.isAuthenticated)
+                break
+            when (authDatum) {
+                is SshAuthDatum.Password -> {
+                    ssh.authPassword(username, authDatum.passwordFinder)
+                }
+                is SshAuthDatum.PublicKeyFile -> {
+                    ssh.authPublickey(username,
+                        ssh.loadKeys(authDatum.keyFile.absolutePath, authDatum.passphraseFinder))
+                }
             }
         }
         return this
