@@ -7,10 +7,13 @@ package com.zeapo.pwdstore.git.config
 import android.util.Base64
 import com.github.ajalt.timberkt.d
 import com.github.ajalt.timberkt.w
+import com.zeapo.pwdstore.utils.clear
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.common.Buffer.PlainBuffer
+import net.schmizz.sshj.common.DisconnectReason
+import net.schmizz.sshj.common.SSHException
 import net.schmizz.sshj.common.SSHRuntimeException
 import net.schmizz.sshj.common.SecurityUtils
 import net.schmizz.sshj.connection.channel.direct.Session
@@ -33,33 +36,57 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.suspendCoroutine
 
 sealed class SshAuthDatum {
-    class Password(val passwordFinder: InteractivePasswordFinder) : SshAuthDatum()
-    class PublicKeyFile(val keyFile: File, val passphraseFinder: InteractivePasswordFinder) : SshAuthDatum()
+    class Password(val passwordFinder: InteractivePasswordFinder) : SshAuthDatum() {
+        override fun clearCredentials() {
+            passwordFinder.clearPassword()
+        }
+    }
+
+    class PublicKeyFile(val keyFile: File, val passphraseFinder: InteractivePasswordFinder) : SshAuthDatum() {
+        override fun clearCredentials() {
+            passphraseFinder.clearPassword()
+        }
+    }
+
+    abstract fun clearCredentials()
 }
 
 abstract class InteractivePasswordFinder : PasswordFinder {
 
-    private var isRetry = false
-    private var shouldRetry = true
-
     abstract fun askForPassword(cont: Continuation<String?>, isRetry: Boolean)
 
+    private var isRetry = false
+    private var lastPassword: CharArray? = null
+
+    fun resetForReuse() {
+        isRetry = false
+    }
+
+    fun clearPassword() {
+        lastPassword?.clear()
+        lastPassword = null
+    }
+
     final override fun reqPassword(resource: Resource<*>?): CharArray {
+        if (lastPassword != null && !isRetry) {
+            // This instance successfully authenticated in a previous authentication step and is
+            // now being reused for a new one. We try the previous password so that the user
+            // does not have to type it again.
+            isRetry = true
+            return lastPassword!!
+        }
+        clearPassword()
         val password = runBlocking(Dispatchers.Main) {
             suspendCoroutine<String?> { cont ->
                 askForPassword(cont, isRetry)
             }
         }
         isRetry = true
-        return if (password != null) {
-            password.toCharArray()
-        } else {
-            shouldRetry = false
-            CharArray(0)
-        }
+        return password?.toCharArray()?.also { lastPassword = it }
+            ?: throw SSHException(DisconnectReason.AUTH_CANCELLED_BY_USER)
     }
 
-    final override fun shouldRetry(resource: Resource<*>?) = shouldRetry
+    final override fun shouldRetry(resource: Resource<*>?) = true
 }
 
 class SshjSessionFactory(private val username: String, private val hostKeyFile: File) : SshSessionFactory() {
@@ -72,6 +99,11 @@ class SshjSessionFactory(private val username: String, private val hostKeyFile: 
 
     override fun getSession(uri: URIish, credentialsProvider: CredentialsProvider?, fs: FS?, tms: Int): RemoteSession {
         return SshjSession(uri, username, hostKeyFile, authData).connect()
+    }
+
+    fun clearCredentials() {
+        for (authDatum in authData)
+            authDatum.clearCredentials()
     }
 }
 
@@ -114,10 +146,12 @@ private class SshjSession(private val uri: URIish, private val username: String,
             when (authDatum) {
                 is SshAuthDatum.Password -> {
                     ssh.authPassword(username, authDatum.passwordFinder)
+                    authDatum.passwordFinder.resetForReuse()
                 }
                 is SshAuthDatum.PublicKeyFile -> {
                     ssh.authPublickey(username,
                         ssh.loadKeys(authDatum.keyFile.absolutePath, authDatum.passphraseFinder))
+                    authDatum.passphraseFinder.resetForReuse()
                 }
             }
         }

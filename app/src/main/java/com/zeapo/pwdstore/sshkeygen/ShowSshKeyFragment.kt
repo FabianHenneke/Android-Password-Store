@@ -7,18 +7,15 @@ package com.zeapo.pwdstore.sshkeygen
 import android.annotation.SuppressLint
 import android.app.Dialog
 import android.content.ClipData
-import android.content.ClipboardManager
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
-import androidx.core.content.getSystemService
 import androidx.fragment.app.DialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.zeapo.pwdstore.R
-import org.apache.commons.io.FileUtils
+import com.zeapo.pwdstore.utils.clipboard
 import java.io.File
-import java.nio.charset.StandardCharsets
 
 class ShowSshKeyFragment : DialogFragment() {
 
@@ -41,8 +38,7 @@ class ShowSshKeyFragment : DialogFragment() {
         ad.setOnShowListener {
             val b = ad.getButton(AlertDialog.BUTTON_NEUTRAL)
             b.setOnClickListener {
-                val clipboard = activity.getSystemService<ClipboardManager>()
-                    ?: return@setOnClickListener
+                val clipboard = activity.clipboard ?: return@setOnClickListener
                 val clip = ClipData.newPlainText("public key", publicKey.text.toString())
                 clipboard.setPrimaryClip(clip)
             }
@@ -61,7 +57,7 @@ class ShowSshKeyFragment : DialogFragment() {
     private fun readKeyFromFile() {
         val file = File(requireActivity().filesDir.toString() + "/.ssh_key.pub")
         try {
-            publicKey.text = FileUtils.readFileToString(file, StandardCharsets.UTF_8)
+            publicKey.text = file.readText()
         } catch (e: Exception) {
             e.printStackTrace()
         }
