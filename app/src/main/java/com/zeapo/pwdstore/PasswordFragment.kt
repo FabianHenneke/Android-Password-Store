@@ -20,6 +20,7 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.observe
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.snackbar.Snackbar
 import com.zeapo.pwdstore.databinding.PasswordRecyclerViewBinding
 import com.zeapo.pwdstore.git.BaseGitActivity
@@ -45,6 +46,7 @@ class PasswordFragment : Fragment(R.layout.password_recycler_view) {
 
     private val model: SearchableRepositoryViewModel by activityViewModels()
     private val binding by viewBinding(PasswordRecyclerViewBinding::bind)
+    private val bottomSheetBehavior by lazy { BottomSheetBehavior.from(binding.bottomSheet) }
 
     private fun requireStore() = requireActivity() as PasswordStore
 
@@ -260,6 +262,21 @@ class PasswordFragment : Fragment(R.layout.password_recycler_view) {
     fun createFolder() = requireStore().createFolder()
 
     fun createPassword() = requireStore().createPassword()
+
+    fun showProgressSheet(text: String, progressUnits: Int) {
+        require(progressUnits >= 0)
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+        binding.bottomSheetProgress.max = progressUnits
+        binding.bottomSheetProgress.progress = 0
+        binding.bottomSheetText.text = text
+    }
+
+    fun makeProgress() {
+        binding.bottomSheetProgress.incrementProgressBy(1)
+        if (binding.bottomSheetProgress.progress >= binding.bottomSheetProgress.max) {
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+        }
+    }
 
     interface OnFragmentInteractionListener {
         fun onFragmentInteraction(item: PasswordItem)

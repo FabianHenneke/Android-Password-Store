@@ -605,11 +605,15 @@ class PasswordStore : AppCompatActivity(R.layout.activity_pwdstore) {
             d { "Moving passwords to ${intentData.getStringExtra("SELECTED_FOLDER_PATH")}" }
             d { filesToMove.joinToString(", ") }
 
+            // The last unit of progress is made with the commit.
+            plist?.showProgressSheet(resources.getQuantityString(R.plurals.password_move_action, filesToMove.size), filesToMove.size + 1)
+
             lifecycleScope.launch(Dispatchers.IO) {
                 for (file in filesToMove) {
                     val source = File(file)
                     if (!source.exists()) {
                         e { "Tried moving something that appears non-existent." }
+                        plist?.makeProgress()
                         continue
                     }
                     val destinationFile = File(target.absolutePath + "/" + source.name)
@@ -629,6 +633,7 @@ class PasswordStore : AppCompatActivity(R.layout.activity_pwdstore) {
                                 .setPositiveButton(R.string.dialog_ok) { _, _ ->
                                     launch(Dispatchers.IO) {
                                         movePassword(source, destinationFile)
+                                        plist?.makeProgress()
                                     }
                                 }
                                 .setNegativeButton(R.string.dialog_cancel, null)
@@ -637,12 +642,13 @@ class PasswordStore : AppCompatActivity(R.layout.activity_pwdstore) {
                     } else {
                         launch(Dispatchers.IO) {
                             movePassword(source, destinationFile)
+                            plist?.makeProgress()
                         }
                     }
                 }
                 when (filesToMove.size) {
                     1 -> {
-                        val source = File(filesToMove[0])
+                        val source = File(filesToMove.first())
                         val basename = source.nameWithoutExtension
                         val sourceLongName = getLongName(requireNotNull(source.parent), repositoryPath, basename)
                         val destinationLongName = getLongName(target.absolutePath, repositoryPath, basename)
@@ -658,6 +664,7 @@ class PasswordStore : AppCompatActivity(R.layout.activity_pwdstore) {
                         }
                     }
                 }
+                plist?.makeProgress()
             }
             resetPasswordList()
             plist?.dismissActionMode()

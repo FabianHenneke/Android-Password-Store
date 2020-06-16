@@ -41,6 +41,14 @@
     <string name="password_exists_message">This will overwrite %1$s with %2$s.</string>
     <string name="password_move_error_title">Error while moving passwords</string>
     <string name="password_move_error_message">Failed to move %1$s to %2$s</string>
+    <plurals name="password_move_action">
+        <item quantity="one">Moving %d password…</item>
+        <item quantity="other">Moving %d passwords…</item>
+    </plurals>
+    <plurals name="password_delete_action">
+        <item quantity="one">Deleting %d password…</item>
+        <item quantity="other">Deleting %d passwords…</item>
+    </plurals>
 
     <!-- git commits -->
     <string name="git_commit_add_text">Add generated password for %1$s using Android Password Store.</string>
