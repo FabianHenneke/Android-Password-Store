@@ -7,6 +7,7 @@ package com.zeapo.pwdstore.crypto
 
 import android.content.Intent
 import android.graphics.Typeface
+import android.os.Build
 import android.os.Bundle
 import android.text.method.PasswordTransformationMethod
 import android.view.Menu
@@ -18,6 +19,7 @@ import androidx.activity.result.contract.ActivityResultContracts.StartIntentSend
 import androidx.lifecycle.lifecycleScope
 import com.github.ajalt.timberkt.e
 import com.zeapo.pwdstore.R
+import com.zeapo.pwdstore.autotype.BluetoothKeyboard
 import com.zeapo.pwdstore.databinding.DecryptLayoutBinding
 import com.zeapo.pwdstore.model.PasswordEntry
 import com.zeapo.pwdstore.utils.PreferenceKeys
@@ -40,6 +42,7 @@ class DecryptActivity : BasePgpActivity(), OpenPgpServiceConnection.OnBound {
 
     private val relativeParentPath by lazy { getParentPath(fullPath, repoPath) }
     private var passwordEntry: PasswordEntry? = null
+    private val keyboard = BluetoothKeyboard(this)
 
     private val userInteractionRequiredResult = registerForActivityResult(StartIntentSenderForResult()) { result ->
         if (result.data == null) {
@@ -78,6 +81,10 @@ class DecryptActivity : BasePgpActivity(), OpenPgpServiceConnection.OnBound {
             } catch (e: RuntimeException) {
                 passwordLastChanged.visibility = View.GONE
             }
+        }
+        keyboard.initializeBluetoothHidDevice()
+        binding.autotype.setOnClickListener {
+            keyboard.connectDeviceAndSend(keyboard.bondedDevices.first { it.name == "Laptop" }, passwordEntry!!.password)
         }
     }
 
